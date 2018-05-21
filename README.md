@@ -1,6 +1,6 @@
 # go-register-server
 
-The microservice registration center is implemented by the go language, by tightly depend on the Kubernetes, the microservice registration is implemented by monitoring the state changes of the k8s pod, and adapt to the interface of the spring cloud eureka client to fetch service registry. Each microservice fetch  online and healthy micro-services list from the registration center , providing service governance in Choerodon, and sending service up and down events.
+The microservice registration center is implemented by the go programming language, by tightly depend on the Kubernetes, the microservice registration is implemented by monitoring the state changes of the k8s pod, and adapt to the interface of the spring cloud eureka client to fetch service registry. Each microservice fetch  online and healthy micro-services list from the registration center , providing service governance in Choerodon, and sending service up and down events.
 
 ## Feature
 
