@@ -9,9 +9,6 @@ The microservice registration center is implemented by the go language, by tight
 
 ## Requirements
 
-- Go 1.9.4 and above
-- [Dep](https://github.com/golang/dep)
-
 1. Configuring the file of Kubeclient config
 2. Each microservice pod must have the following three labels。
 
@@ -33,7 +30,9 @@ go run main.go \
 ```
 ## Dependencies
 
-- golang environment
+
+- Go 1.9.4 and above
+- [Dep](https://github.com/golang/dep)
 
 ## Contribute
 
