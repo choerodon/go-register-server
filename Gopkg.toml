@@ -39,15 +39,15 @@
 
 [[constraint]]
   name = "k8s.io/client-go"
-  branch = "release-5.0"
+  version = "6.0.0"
 
-[[override]]
-  name = "k8s.io/apimachinery"
-  branch = "release-1.8"
-
-[[override]]
+[[constraint]]
   name = "k8s.io/api"
-  branch = "release-1.8"
+  version = "kubernetes-1.9.2"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  version = "kubernetes-1.9.2"
 
 [[constraint]]
   name = "github.com/Shopify/sarama"
