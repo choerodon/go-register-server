@@ -60,6 +60,7 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
+	//kubeinformers.NewFilteredSharedInformerFactory
 
 	podController := controller.NewController(kubeClient, kubeInformerFactory, appRepo)
 
