@@ -53,6 +53,7 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 	if err != nil {
 		return err
 	}
+	id = id + strconv.FormatInt(time.Now().UnixNano(), 10)
 	recorder := createRecorder(client)
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
 		namespace,
