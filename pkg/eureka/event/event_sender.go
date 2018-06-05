@@ -18,11 +18,13 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"github.com/choerodon/go-register-server/pkg/eureka/apps"
+	"strconv"
+	"fmt"
 )
 
 const (
 	DefaultNamespace = "io-choerodon"
-	DefaultName      = "register-server"
+	DefaultResourceName  = "register-server"
 	topic            = "register-server"
 )
 
@@ -54,7 +56,7 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 	recorder := createRecorder(client)
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
 		namespace,
-		DefaultName,
+		DefaultResourceName,
 		client.CoreV1(),
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
@@ -75,10 +77,11 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 					var msg apps.Instance
 					msg = <-instance
 					event := &Event{
-						Id:      msg.InstanceId,
-						AppName: msg.App,
-						Status:  string(msg.Status),
-						Version: msg.Metadata["VERSION"],
+						AppName:         msg.App,
+						Status:          string(msg.Status),
+						Version:         msg.Metadata["VERSION"],
+						InstanceAddress: msg.IPAddr + ":" + strconv.FormatInt(int64(msg.Port.Port), 10),
+						CreateTime:      jsonTime(time.Now()),
 					}
 					sendMsg(p, event)
 				}
@@ -96,7 +99,12 @@ func createRecorder(kubeClient *kubernetes.Clientset) record.EventRecorder {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.CoreV1().RESTClient()).Events("")})
-	return eventBroadcaster.NewRecorder(runtime.NewScheme(), v1.EventSource{Component: "register-server"})
+	return eventBroadcaster.NewRecorder(runtime.NewScheme(), v1.EventSource{Component: DefaultResourceName})
+}
+
+func (myTime jsonTime) MarshalJSON() ([]byte, error) {
+	var stamp = fmt.Sprintf("\"%s\"", time.Time(myTime).Format("2006-01-02 15:04:05"))
+	return []byte(stamp), nil
 }
 
 func sendMsg(producer sarama.SyncProducer, toSend *Event) {
@@ -105,6 +113,7 @@ func sendMsg(producer sarama.SyncProducer, toSend *Event) {
 		Topic:     topic,
 		Value:     sarama.ByteEncoder(v),
 		Timestamp: time.Now(),
+		Key:       nil,
 	}
 	if partion, offset, err := producer.SendMessage(msg); err != nil {
 		glog.Errorln(err)
