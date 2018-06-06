@@ -117,22 +117,20 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle
 	}
 	defer c.workqueue.Done(key)
 
-	if lockSingle[0] > 0 {
-		forget, err := c.syncHandler(key.(string), instance)
-		if err == nil {
-			if forget {
-				c.workqueue.Forget(key)
-			}
-			return true
+	forget, err := c.syncHandler(key.(string), instance, lockSingle)
+	if err == nil {
+		if forget {
+			c.workqueue.Forget(key)
 		}
-		runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
-		c.workqueue.AddRateLimited(key)
+		return true
 	}
+	runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
+	c.workqueue.AddRateLimited(key)
 
 	return true
 }
 
-func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool, error) {
+func (c *Controller) syncHandler(key string, instance chan apps.Instance, lockSingle apps.RefArray) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
@@ -144,8 +142,10 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if errors.IsNotFound(err) {
 			if ins := c.appRepo.DeleteInstance(key); ins != nil {
 				ins.Status = apps.DOWN
-				glog.Info("create down event for ", key)
-				instance <- *ins
+				if lockSingle[0] > 0 {
+					glog.Info("create down event for ", key)
+					instance <- *ins
+				}
 			}
 			runtime.HandleError(fmt.Errorf("pod '%s' in work queue no longer exists", key))
 			return true, nil
@@ -170,15 +170,19 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if in := convertor.ConvertPod2Instance(pod); c.appRepo.Register(in, key) {
 			ins := *in
 			ins.Status = apps.UP
-			glog.Info("create up event for ", key)
-			instance <- ins
+			if lockSingle[0] > 0 {
+				glog.Info("create up event for ", key)
+				instance <- ins
+			}
 		}
 
 	} else {
 		if ins := c.appRepo.DeleteInstance(key); ins != nil {
 			ins.Status = apps.DOWN
-			glog.Info("create down event for ", key)
-			instance <- *ins
+			if lockSingle[0] > 0 {
+				glog.Info("create down event for ", key)
+				instance <- *ins
+			}
 		}
 	}
 

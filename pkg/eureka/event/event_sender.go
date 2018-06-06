@@ -39,6 +39,7 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 	config.Producer.Partitioner = sarama.NewRandomPartitioner
 	config.Producer.Return.Successes = true
 	config.Producer.Timeout = 5 * time.Second
+	config.Version, _ = sarama.ParseKafkaVersion("1.0.0")
 	kafkaAddresses := os.Getenv("KAFKA_ADDRESSES")
 	if len(kafkaAddresses) == 0 {
 		return errors.New("no kafka address in env")
