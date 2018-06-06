@@ -75,3 +75,5 @@ type LeaseInfo struct {
 type InstanceMetadata struct {
 	Class string `xml:"@class" json:"@class"`
 }
+
+type RefArray *[1]int

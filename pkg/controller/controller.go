@@ -82,7 +82,7 @@ func (c *Controller) enqueuePod(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
+func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}, lockSingle apps.RefArray) {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -99,7 +99,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
-			for c.processNextWorkItem(instance) {
+			for c.processNextWorkItem(instance, lockSingle) {
 			}
 		}, time.Second, stopCh)
 	}
@@ -109,7 +109,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
+func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle apps.RefArray) bool {
 	key, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -117,21 +117,20 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
 	}
 	defer c.workqueue.Done(key)
 
-	forget, err := c.syncHandler(key.(string), instance)
+	forget, err := c.syncHandler(key.(string), instance, lockSingle)
 	if err == nil {
 		if forget {
 			c.workqueue.Forget(key)
 		}
 		return true
 	}
-
 	runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
 	c.workqueue.AddRateLimited(key)
 
 	return true
 }
 
-func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool, error) {
+func (c *Controller) syncHandler(key string, instance chan apps.Instance, lockSingle apps.RefArray) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
@@ -143,8 +142,10 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if errors.IsNotFound(err) {
 			if ins := c.appRepo.DeleteInstance(key); ins != nil {
 				ins.Status = apps.DOWN
-				glog.Info("create down event for ", key)
-				instance <- *ins
+				if lockSingle[0] > 0 {
+					glog.Info("create down event for ", key)
+					instance <- *ins
+				}
 			}
 			runtime.HandleError(fmt.Errorf("pod '%s' in work queue no longer exists", key))
 			return true, nil
@@ -169,15 +170,19 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if in := convertor.ConvertPod2Instance(pod); c.appRepo.Register(in, key) {
 			ins := *in
 			ins.Status = apps.UP
-			glog.Info("create up event for ", key)
-			instance <- ins
+			if lockSingle[0] > 0 {
+				glog.Info("create up event for ", key)
+				instance <- ins
+			}
 		}
 
 	} else {
 		if ins := c.appRepo.DeleteInstance(key); ins != nil {
 			ins.Status = apps.DOWN
-			glog.Info("create down event for ", key)
-			instance <- *ins
+			if lockSingle[0] > 0 {
+				glog.Info("create down event for ", key)
+				instance <- *ins
+			}
 		}
 	}
 

@@ -39,6 +39,10 @@ func NewServerCommand() *cobra.Command {
 	return cmd
 }
 
+func newReArray() apps.RefArray {
+	return apps.RefArray(new([1]int))
+}
+
 func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 	appRepo := repository.NewApplicationRepository()
 
@@ -53,7 +57,11 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	var instance = make(chan apps.Instance, 100)
 
-	go event.NewEventSender(kubeClient, instance, stopCh)
+    lockSingle := newReArray()
+
+	lockSingle[0] = 0
+
+	go event.NewEventSender(kubeClient, instance, stopCh, lockSingle)
 
 	if err != nil {
 		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
@@ -65,7 +73,7 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 	podController := controller.NewController(kubeClient, kubeInformerFactory, appRepo)
 
 	go kubeInformerFactory.Start(stopCh)
-	go podController.Run(instance, stopCh)
+	go podController.Run(instance, stopCh, lockSingle)
 
 	return registerServer.PrepareRun().Run(appRepo, stopCh)
 }
