@@ -82,7 +82,7 @@ func (c *Controller) enqueuePod(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
+func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}, lockSingle apps.RefArray) {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -99,7 +99,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
-			for c.processNextWorkItem(instance) {
+			for c.processNextWorkItem(instance, lockSingle) {
 			}
 		}, time.Second, stopCh)
 	}
@@ -109,7 +109,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
+func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle apps.RefArray) bool {
 	key, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -117,16 +117,17 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
 	}
 	defer c.workqueue.Done(key)
 
-	forget, err := c.syncHandler(key.(string), instance)
-	if err == nil {
-		if forget {
-			c.workqueue.Forget(key)
+	if lockSingle[0] > 0 {
+		forget, err := c.syncHandler(key.(string), instance)
+		if err == nil {
+			if forget {
+				c.workqueue.Forget(key)
+			}
+			return true
 		}
-		return true
+		runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
+		c.workqueue.AddRateLimited(key)
 	}
-
-	runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
-	c.workqueue.AddRateLimited(key)
 
 	return true
 }

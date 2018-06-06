@@ -28,7 +28,7 @@ const (
 	topic            = "register-server"
 )
 
-func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance, stopCh <-chan struct{}) error {
+func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance, stopCh <-chan struct{}, lockSingle apps.RefArray) error {
 	namespace := os.Getenv("REGISTER_SERVER_NAMESPACE")
 	if namespace == "" {
 		glog.Info("use default namespace")
@@ -74,6 +74,7 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(stop <-chan struct{}) {
+				lockSingle[0] = 1
 				for {
 					var msg apps.Instance
 					msg = <-instance
@@ -88,6 +89,7 @@ func NewEventSender(client *kubernetes.Clientset, instance <-chan apps.Instance,
 				}
 			},
 			OnStoppedLeading: func() {
+				lockSingle[0] = 0
 				glog.Fatalf("leader election lost")
 			},
 		},
@@ -120,6 +122,6 @@ func sendMsg(producer sarama.SyncProducer, toSend *Event) {
 		glog.Errorln(err)
 		return
 	} else {
-		glog.Infof("event sender send instance event for %s ,partion:%d, offset:%d", toSend.AppName, partion, offset)
+		glog.Infof("event sender send instance event for %s ,partion:%d, offset:%d, data:%s", toSend.AppName, partion, offset, v)
 	}
 }
