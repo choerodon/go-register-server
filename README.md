@@ -17,9 +17,8 @@ choerodon.io/service        (Microservice name)
 choerodon.io/version        (version)
 choerodon.io/metrics-port   (metrics-port)
 ```
-3. Need two environment variables `KAFKA_ADDRESSES` (the address of kafka), `REGISTER _SERVERNAMESPACE` (the k8s namespace that this application belongs to).
-
-
+3. Need two environment variables `KAFKA_ADDRESSES` (the address of kafka), `REGISTER_SERVER_NAMESPACE` (the k8s namespace that this registry belongs to),
+  `REGISTER_SERVICE_NAMESPACE` (the k8s namespaces that the services registered in this registry belong to, you can use a comma to split multiply namespaces).
 
 ## Installation and Getting Started
 
