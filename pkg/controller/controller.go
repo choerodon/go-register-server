@@ -18,6 +18,9 @@ import (
 	"github.com/choerodon/go-register-server/pkg/convertor"
 	"github.com/choerodon/go-register-server/pkg/eureka/apps"
 	"github.com/choerodon/go-register-server/pkg/eureka/repository"
+	"os"
+	"github.com/choerodon/go-register-server/pkg/eureka/event"
+	"strings"
 )
 
 const (
@@ -95,11 +98,16 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}, lo
 		glog.Error("failed to wait for caches to sync")
 	}
 
+	registerServiceNamespaces := strings.Split(os.Getenv("REGISTER_SERVICE_NAMESPACE"), ",")
+	if len(registerServiceNamespaces) < 1 {
+		registerServiceNamespaces[0] = event.DefaultResourceName
+	}
+
 	glog.Info("Starting workers")
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
-			for c.processNextWorkItem(instance, lockSingle) {
+			for c.processNextWorkItem(instance, registerServiceNamespaces, lockSingle) {
 			}
 		}, time.Second, stopCh)
 	}
@@ -109,7 +117,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}, lo
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle apps.RefArray) bool {
+func (c *Controller) processNextWorkItem(instance chan apps.Instance, registerServiceNamespaces []string, lockSingle apps.RefArray) bool {
 	key, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -117,7 +125,7 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle
 	}
 	defer c.workqueue.Done(key)
 
-	forget, err := c.syncHandler(key.(string), instance, lockSingle)
+	forget, err := c.syncHandler(key.(string), instance, registerServiceNamespaces, lockSingle)
 	if err == nil {
 		if forget {
 			c.workqueue.Forget(key)
@@ -130,8 +138,17 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance, lockSingle
 	return true
 }
 
-func (c *Controller) syncHandler(key string, instance chan apps.Instance, lockSingle apps.RefArray) (bool, error) {
+func (c *Controller) syncHandler(key string, instance chan apps.Instance, registerServiceNamespaces []string, lockSingle apps.RefArray) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	matchNum := 0
+	for _, ns := range registerServiceNamespaces {
+		if strings.Compare(ns, namespace) == 0 {
+			matchNum ++
+		}
+	}
+	if matchNum < 1 {
+		return true, nil
+	}
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return true, nil
