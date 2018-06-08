@@ -26,7 +26,7 @@ service:
 
 metrics:
   path: /metrics
-  label: go-register-server
+  group: go-register-server
 
 logs:
   parser: docker
