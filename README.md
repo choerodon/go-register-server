@@ -29,9 +29,12 @@ go run main.go \
 ```
 ## Dependencies
 
-
 - Go 1.9.4 and above
 - [Dep](https://github.com/golang/dep)
+
+## Links
+
+* [Change Log](./CHANGELOG.zh-CN.md)
 
 ## Contribute
 
