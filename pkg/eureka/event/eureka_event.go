@@ -1,14 +1,13 @@
 package event
 
-import (
-	_ "github.com/Shopify/sarama"
-)
+import "time"
+
+type jsonTime time.Time
 
 type Event struct {
 	Status  string `json:"status"`
 	AppName string `json:"appName"`
-	Id      string `json:"id"`
 	Version string `json:"version"`
-	Uuid    string `json:"uuid"`
-	ApiData string `json:"apiData"`
+	InstanceAddress string `json:"instanceAddress"`
+	CreateTime      jsonTime  `json:"createTime"`
 }

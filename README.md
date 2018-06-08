@@ -1,28 +1,24 @@
-# register-server
+# Go Register Server
 
-The microservice registration center is implemented in the go language, by tightly integrating the Kubernetes, the microservice registration is implemented by monitoring the state changes of the k8s pod, and pull the interface in the spring cloud eureka client service list. Each microservice pulls the registration center to real-time online and healthy micro-services list, providing service governance in Choerodon, and sending service online and offline events.
+The microservice registration center is implemented by the go programming language, by tightly depend on the Kubernetes, the microservice registration is implemented by monitoring the state changes of the k8s pod, and adapt to the interface of the spring cloud eureka client to fetch service registry. Each microservice fetch  online and healthy micro-services list from the registration center , providing service governance in Choerodon, and sending service up and down events.
 
 ## Feature
 
-- [x] When launching multiple registrar instances, the service events of online and down are sent through the competition leader.
+- [x] service discovery
+- [x] send up down event
 
 ## Requirements
 
 1. Configuring the file of Kubeclient config
-2. Each micro service pod must have the following three labels。
+2. Each microservice pod must have the following three labels。
 
 ```
 choerodon.io/service        (Microservice name)
 choerodon.io/version        (version)
 choerodon.io/metrics-port   (metrics-port)
 ```
-3. Need two environment variables `KAFKA ADDRESSES` (the address of kafka), `REGISTER _SERVERNAMESPACE` (the k8s namespace that this application belongs to).
-
-## To get the code
-
-```
-git clone https://github.com/choerodon/go-register-server.git
-```
+3. Need two environment variables `KAFKA_ADDRESSES` (the address of kafka), `REGISTER_SERVER_NAMESPACE` (the k8s namespace that this registry belongs to),
+  `REGISTER_SERVICE_NAMESPACE` (the k8s namespaces that the services registered in this registry belong to, you can use a comma to split multiply namespaces).
 
 ## Installation and Getting Started
 
@@ -33,10 +29,17 @@ go run main.go \
 ```
 ## Dependencies
 
-- golang environment
+- Go 1.9.4 and above
+- [Dep](https://github.com/golang/dep)
 
-## Reporting Issues
-If you find any shortcomings or bugs, please describe them in the Issue.
-    
-## How to Contribute
-Pull requests are welcome! Follow this link for more information on how to contribute.
+## Links
+
+* [Change Log](./CHANGELOG.zh-CN.md)
+
+## Contribute
+
+We welcome your input! If you have feedback, please [submit an issue](https://github.com/choerodon/choerodon/issues). If you'd like to participate in development, please read the [documentation of contribution](https://github.com/choerodon/choerodon/blob/master/CONTRIBUTING.md) and submit a pull request.
+
+## Support
+
+If you have any questions and need our support, [reach out to us one way or another](http://choerodon.io/zh/community/).

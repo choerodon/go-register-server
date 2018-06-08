@@ -18,6 +18,9 @@ import (
 	"github.com/choerodon/go-register-server/pkg/convertor"
 	"github.com/choerodon/go-register-server/pkg/eureka/apps"
 	"github.com/choerodon/go-register-server/pkg/eureka/repository"
+	"os"
+	"github.com/choerodon/go-register-server/pkg/eureka/event"
+	"strings"
 )
 
 const (
@@ -82,7 +85,7 @@ func (c *Controller) enqueuePod(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
+func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}, lockSingle apps.RefArray) {
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -95,11 +98,16 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 		glog.Error("failed to wait for caches to sync")
 	}
 
+	registerServiceNamespaces := strings.Split(os.Getenv("REGISTER_SERVICE_NAMESPACE"), ",")
+	if len(registerServiceNamespaces) < 1 {
+		registerServiceNamespaces[0] = event.DefaultResourceName
+	}
+
 	glog.Info("Starting workers")
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
-			for c.processNextWorkItem(instance) {
+			for c.processNextWorkItem(instance, registerServiceNamespaces, lockSingle) {
 			}
 		}, time.Second, stopCh)
 	}
@@ -109,7 +117,7 @@ func (c *Controller) Run(instance chan apps.Instance, stopCh <-chan struct{}) {
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
+func (c *Controller) processNextWorkItem(instance chan apps.Instance, registerServiceNamespaces []string, lockSingle apps.RefArray) bool {
 	key, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -117,22 +125,30 @@ func (c *Controller) processNextWorkItem(instance chan apps.Instance) bool {
 	}
 	defer c.workqueue.Done(key)
 
-	forget, err := c.syncHandler(key.(string), instance)
+	forget, err := c.syncHandler(key.(string), instance, registerServiceNamespaces, lockSingle)
 	if err == nil {
 		if forget {
 			c.workqueue.Forget(key)
 		}
 		return true
 	}
-
 	runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
 	c.workqueue.AddRateLimited(key)
 
 	return true
 }
 
-func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool, error) {
+func (c *Controller) syncHandler(key string, instance chan apps.Instance, registerServiceNamespaces []string, lockSingle apps.RefArray) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	matchNum := 0
+	for _, ns := range registerServiceNamespaces {
+		if strings.Compare(ns, namespace) == 0 {
+			matchNum ++
+		}
+	}
+	if matchNum < 1 {
+		return true, nil
+	}
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return true, nil
@@ -143,8 +159,10 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if errors.IsNotFound(err) {
 			if ins := c.appRepo.DeleteInstance(key); ins != nil {
 				ins.Status = apps.DOWN
-				glog.Info("create down event for ", key)
-				instance <- *ins
+				if lockSingle[0] > 0 {
+					glog.Info("create down event for ", key)
+					instance <- *ins
+				}
 			}
 			runtime.HandleError(fmt.Errorf("pod '%s' in work queue no longer exists", key))
 			return true, nil
@@ -169,15 +187,19 @@ func (c *Controller) syncHandler(key string, instance chan apps.Instance) (bool,
 		if in := convertor.ConvertPod2Instance(pod); c.appRepo.Register(in, key) {
 			ins := *in
 			ins.Status = apps.UP
-			glog.Info("create up event for ", key)
-			instance <- ins
+			if lockSingle[0] > 0 {
+				glog.Info("create up event for ", key)
+				instance <- ins
+			}
 		}
 
 	} else {
 		if ins := c.appRepo.DeleteInstance(key); ins != nil {
 			ins.Status = apps.DOWN
-			glog.Info("create down event for ", key)
-			instance <- *ins
+			if lockSingle[0] > 0 {
+				glog.Info("create down event for ", key)
+				instance <- *ins
+			}
 		}
 	}
 
