@@ -15,7 +15,6 @@ deployment:
 env:
   open:
     KAFKA_ADDRESSES: kafka-0.kafka-headless.kafka.svc.cluster.local:9092,kafka-1.kafka-headless.kafka.svc.cluster.local:9092,kafka-2.kafka-headless.kafka.svc.cluster.local:9092
-    REGISTER_SERVER_NAMESPACE: io-choerodon
     REGISTER_SERVICE_NAMESPACE: io-choerodon
 
 service:
