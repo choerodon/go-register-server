@@ -61,7 +61,7 @@ workflows:
       - helm_chart_build:
           context: org-global
           requires:
-          - docker_build
+            - docker_build
           filters:
             tags:
               only: /^.*/
