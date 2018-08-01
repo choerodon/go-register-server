@@ -12,11 +12,13 @@ The microservice registration center is implemented by the go programming langua
 1. Configuring the file of Kubeclient config
 2. Each microservice pod must have the following three labels。
 
-```
-choerodon.io/service        (Microservice name)
-choerodon.io/version        (version)
-choerodon.io/metrics-port   (metrics-port)
-```
+    ```
+    choerodon.io/service        (Microservice name)
+    choerodon.io/version        (version)
+    choerodon.io/metrics-port   (metrics-port)
+    ```
+  If your service has contextPath, you can specify by `choerodon.io/context-path`
+
 3. Need three environment variables `KAFKA_ADDRESSES` (the address of kafka), `REGISTER_SERVER_NAMESPACE` (the k8s namespace that this registry belongs to),
   `REGISTER_SERVICE_NAMESPACE` (the k8s namespaces that the services registered in this registry belong to, you can use a comma to split multiply namespaces). If you use helm and chart to deploy this service, you only need set `KAFKA_ADDRESSES` and `REGISTER_SERVICE_NAMESPACE`.
 
