@@ -18,6 +18,7 @@ type Status struct {
 const (
 	ChoerodonServiceLabel = "choerodon.io/service"
 	ChoerodonVersionLabel = "choerodon.io/version"
+	ChoerodonContextPathLabel = "choerodon.io/context-path"
 	ChoerodonPortLabel    = "choerodon.io/metrics-port"
 	UP                    = "UP"
 	DOWN                  = "DOWN"
@@ -72,6 +73,11 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 	}
 	metedata := make(map[string]string)
 	metedata["VERSION"] = pod.Labels[ChoerodonVersionLabel]
+	contextPath, ok := pod.Labels[ChoerodonContextPathLabel]
+	if ok {
+		metedata["CONTEXT-PATH"] = contextPath
+	}
+
 	instance.Metadata = metedata
 	instance.LeaseInfo = apps.LeaseInfo{
 		RenewalIntervalInSecs: 10,
