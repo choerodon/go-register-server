@@ -9,6 +9,7 @@ docker-test-build:
     - docker build --pull -t ${DOCKER_REGISTRY}/${GROUP_NAME}/${PROJECT_NAME}:${CI_COMMIT_TAG} .
   only:
     - /^feature-.*$/
+    - /^bugfix-.*$/
 
 docker-build:
   stage: docker-build
@@ -18,6 +19,7 @@ docker-build:
     - chart_build
   only:
     - tags
+    - master
     - develop
     - /^release-.*$/
     - /^hotfix-.*$/
