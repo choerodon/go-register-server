@@ -13,23 +13,21 @@ jobs:
       - attach_workspace:
           at: .
       - run: |
-          export CI_COMMIT_TAG=$(GetVersion)
           sed -i "s/registry.cn-hangzhou.aliyuncs.com\/choerodon-tools\/golang:1.9.4-alpine3.7/golang:1.9.4-alpine3.7/g" Dockerfile
           docker login -u ${REGISTRY_USER} -p ${REGISTRY_PASSWORD}
-          docker build --pull -t ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CI_COMMIT_TAG} .
-          docker push ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CI_COMMIT_TAG}
+          docker build --pull -t ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG} .
+          docker push ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
 
   helm_chart_build:
     <<: *default
     steps:
       - checkout
       - run: |
-          export CI_COMMIT_TAG=$(GetVersion)
           CHART_PATH=`find . -name Chart.yaml`
           yq w -i ${CHART_PATH%/*}/values.yaml image.repository ${DOCKER_GROUP_NAME}/${PROJECT_NAME}
-          yq w -i ${CHART_PATH%/*}/values.yaml image.tag ${CI_COMMIT_TAG}
+          yq w -i ${CHART_PATH%/*}/values.yaml image.tag ${CIRCLE_TAG}
           helm repo add choerodon "${CHART_REPOSITORY}/${CHART_ORGANIZATION}/${CHART_PROJECT}/"
-          helm push --username ${HELM_USER} --password ${HELM_PASSWORD} ${CHART_PATH%/*} --version ${CI_COMMIT_TAG} choerodon
+          helm push --username ${HELM_USER} --password ${HELM_PASSWORD} ${CHART_PATH%/*} --version ${CIRCLE_TAG} choerodon
 
 workflows:
   version: 2
