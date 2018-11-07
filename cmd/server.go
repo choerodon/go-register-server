@@ -13,8 +13,6 @@ import (
 
 	"github.com/choerodon/go-register-server/cmd/options"
 	"github.com/choerodon/go-register-server/pkg/controller"
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
-	"github.com/choerodon/go-register-server/pkg/eureka/event"
 	"github.com/choerodon/go-register-server/pkg/eureka/repository"
 	"github.com/choerodon/go-register-server/pkg/eureka/server"
 	"github.com/choerodon/go-register-server/pkg/signals"
@@ -39,10 +37,6 @@ func NewServerCommand() *cobra.Command {
 	return cmd
 }
 
-func newReArray() apps.RefArray {
-	return apps.RefArray(new([1]int))
-}
-
 func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 	appRepo := repository.NewApplicationRepository()
 
@@ -55,25 +49,16 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 
-	var instance = make(chan apps.Instance, 100)
-
-    lockSingle := newReArray()
-
-	lockSingle[0] = 0
-
-	go event.NewEventSender(kubeClient, instance, stopCh, lockSingle)
-
 	if err != nil {
 		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	//kubeinformers.NewFilteredSharedInformerFactory
 
 	podController := controller.NewController(kubeClient, kubeInformerFactory, appRepo)
 
 	go kubeInformerFactory.Start(stopCh)
-	go podController.Run(instance, stopCh, lockSingle)
+	go podController.Run(stopCh)
 
 	return registerServer.PrepareRun().Run(appRepo, stopCh)
 }
