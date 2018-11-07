@@ -49,9 +49,6 @@
   name = "k8s.io/apimachinery"
   version = "kubernetes-1.9.2"
 
-[[constraint]]
-  name = "github.com/Shopify/sarama"
-  version = "1.17.0"
 
 [prune]
   non-go = true

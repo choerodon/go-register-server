@@ -68,5 +68,4 @@ choerodon.io/metrics-path: {{ .Values.metrics.path | quote }}
 service.enable | 是否创建service
 persistence.enabled | 是否启用持久化存储
 persistence.existingClaim | 绑定的pvc名称
-env.open.KAFKA_ADDRESSES | kafka地址
 env.open.REGISTER_SERVICE_NAMESPACE | 注册中心监听的namespace，多个namespace用空格间隔
