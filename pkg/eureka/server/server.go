@@ -39,7 +39,7 @@ func (s *PreparedRegisterServer) Run(appRepo *repository.ApplicationRepository, 
 	http.Handle("/metrics", promhttp.Handler())
 
 	go func() {
-		glog.Fatal(http.ListenAndServe(":8000", nil))
+		glog.Fatal(http.ListenAndServe(":8010", nil))
 	}()
 
 	glog.Info("Started server")
