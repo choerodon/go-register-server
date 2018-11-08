@@ -28,14 +28,14 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
+        - name: REGISTER_SERVER_NAMESPACE
+          value: {{ .Release.Namespace }}
 {{- range $name, $value := .Values.env.open }}
 {{- if not (empty $value) }}
         - name: {{ $name | quote }}
           value: {{ $value | quote }}
 {{- end }}
 {{- end }}
-        - name: REGISTER_SERVER_NAMESPACE
-          value: {{ .Release.Namespace }}
         ports:
           - name: http
             containerPort: {{ .Values.service.port }}

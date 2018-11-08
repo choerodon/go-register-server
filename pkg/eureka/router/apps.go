@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/choerodon/go-register-server/pkg/eureka/monitor"
 	"html/template"
 	"net/http"
 	"path"
@@ -39,8 +40,8 @@ func (es *EurekaAppsService) Register() {
 	ws.Route(ws.GET("").To(es.home).
 		Doc("Get home page")).Produces("text/html; charset=utf-8")
 
-	ws.Route(ws.GET("/lastn").To(es.lastn).
-		Doc("Get home page")).Produces("text/html; charset=utf-8")
+	//ws.Route(ws.GET("/lastn").To(es.lastn).
+	//	Doc("Get home page")).Produces("text/html; charset=utf-8")
 
 	ws.Route(ws.GET("/eureka/apps").To(es.listEurekaApps).
 		Doc("Get all apps")).Produces("application/json")
@@ -92,14 +93,23 @@ func staticFromQueryParam(req *restful.Request, resp *restful.Response) {
 }
 
 func (es *EurekaAppsService) home(req *restful.Request, resp *restful.Response) {
+	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
 	t, _ := template.ParseFiles("templates/eureka.html")
-	t.Execute(resp.ResponseWriter, "Hello world")
+	register, eurekaInstances := monitor.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
+	t.Execute(resp.ResponseWriter, &apps.EurekaPage{
+		GeneralInfo:        monitor.GetGeneralInfo(),
+		InstanceInfo:       monitor.GetInstanceInfo(),
+		CurrentTime:        time.Now(),
+		AvailableRegisters: register,
+		EurekaInstances:    eurekaInstances,
+	})
 }
 
-func (es *EurekaAppsService) lastn(req *restful.Request, resp *restful.Response) {
-	t, _ := template.ParseFiles("templates/lastn.html")
-	t.Execute(resp.ResponseWriter, "Hello world")
-}
+//func (es *EurekaAppsService) lastn(req *restful.Request, resp *restful.Response) {
+//	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
+//	t, _ := template.ParseFiles("templates/lastn.html")
+//	t.Execute(resp.ResponseWriter, "Hello world")
+//}
 
 func (es *EurekaAppsService) listEurekaAppsDelta(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
