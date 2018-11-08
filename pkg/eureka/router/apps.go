@@ -1,6 +1,10 @@
 package router
 
 import (
+	"github.com/choerodon/go-register-server/pkg/eureka/monitor"
+	"html/template"
+	"net/http"
+	"path"
 	"time"
 
 	"github.com/emicklei/go-restful"
@@ -10,10 +14,6 @@ import (
 	"github.com/choerodon/go-register-server/pkg/eureka/apps"
 	"github.com/choerodon/go-register-server/pkg/eureka/metrics"
 	"github.com/choerodon/go-register-server/pkg/eureka/repository"
-)
-
-const (
-	APIPath = "/eureka"
 )
 
 type EurekaAppsService struct {
@@ -32,27 +32,34 @@ func (es *EurekaAppsService) Register() {
 	glog.Info("Register eureka app APIs")
 
 	ws := new(restful.WebService)
-	ws.Path(APIPath).Produces(restful.MIME_JSON, restful.MIME_XML)
+	ws.Path("").Produces(restful.MIME_JSON, restful.MIME_XML)
 
-	// GET /eureka/apps
-	ws.Route(ws.GET("/apps").To(es.listEurekaApps).
+	ws.Route(ws.GET("/static/{subpath:*}").To(staticFromPathParam))
+	ws.Route(ws.GET("/static").To(staticFromQueryParam))
+
+	ws.Route(ws.GET("").To(es.home).
+		Doc("Get home page")).Produces("text/html; charset=utf-8")
+
+	//ws.Route(ws.GET("/lastn").To(es.lastn).
+	//	Doc("Get home page")).Produces("text/html; charset=utf-8")
+
+	ws.Route(ws.GET("/eureka/apps").To(es.listEurekaApps).
 		Doc("Get all apps")).Produces("application/json")
 
-	ws.Route(ws.GET("/apps/delta").To(es.listEurekaAppsDelta).
+	ws.Route(ws.GET("/eureka/apps/delta").To(es.listEurekaAppsDelta).
 		Doc("Get all apps delta")).Produces("application/json")
 
-	ws.Route(ws.POST("/apps/{app-name}").To(es.registerEurekaApp).
+	ws.Route(ws.POST("/eureka/apps/{app-name}").To(es.registerEurekaApp).
 		Doc("get a user").Produces("application/json").
 		Param(ws.PathParameter("app-name", "app name").DataType("string")))
 
-	ws.Route(ws.PUT("/apps/{app-name}/{instance-id}").To(es.renew).
+	ws.Route(ws.PUT("/eureka/apps/{app-name}/{instance-id}").To(es.renew).
 		Doc("renew").
 		Param(ws.PathParameter("app-name", "app name").DataType("string")).
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 	restful.Add(ws)
 }
 
-// listEurekaApps handles the request to list eureka apps.
 func (es *EurekaAppsService) listEurekaApps(request *restful.Request, response *restful.Response) {
 	start := time.Now()
 
@@ -65,6 +72,45 @@ func (es *EurekaAppsService) listEurekaApps(request *restful.Request, response *
 
 	metrics.FetchProcessTime.Set(float64(cost))
 }
+
+type Message struct {
+	Text string
+}
+
+func staticFromPathParam(req *restful.Request, resp *restful.Response) {
+	actual := path.Join("static", req.PathParameter("subpath"))
+	http.ServeFile(
+		resp.ResponseWriter,
+		req.Request,
+		actual)
+}
+
+func staticFromQueryParam(req *restful.Request, resp *restful.Response) {
+	http.ServeFile(
+		resp.ResponseWriter,
+		req.Request,
+		path.Join("static", req.QueryParameter("resource")))
+}
+
+func (es *EurekaAppsService) home(req *restful.Request, resp *restful.Response) {
+	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
+	t, _ := template.ParseFiles("templates/eureka.html")
+	register, eurekaInstances := monitor.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
+	t.Execute(resp.ResponseWriter, &apps.EurekaPage{
+		GeneralInfo:        monitor.GetGeneralInfo(),
+		InstanceInfo:       monitor.GetInstanceInfo(),
+		CurrentTime:        time.Now(),
+		AvailableRegisters: register,
+		EurekaInstances:    eurekaInstances,
+	})
+}
+
+//func (es *EurekaAppsService) lastn(req *restful.Request, resp *restful.Response) {
+//	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
+//	t, _ := template.ParseFiles("templates/lastn.html")
+//	t.Execute(resp.ResponseWriter, "Hello world")
+//}
+
 func (es *EurekaAppsService) listEurekaAppsDelta(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	applicationResources := &apps.ApplicationResources{
@@ -84,7 +130,4 @@ func (es *EurekaAppsService) registerEurekaApp(request *restful.Request, respons
 
 func (es *EurekaAppsService) renew(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
-	//appName := request.PathParameter("app-name")
-	//instanceId := request.PathParameter("instance-id")
-	//response.WriteAsJson(es.appRepo.Renew(appName, instanceId))
 }
