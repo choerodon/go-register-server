@@ -1,14 +1,9 @@
 package apps
 
-import "time"
-
-//type GeneralInfo struct {
-//	IpAddr                    string `xml:"ipAddr" json:"ipAddr"`
-//	UsedMemory                string   `xml:"usedMemory" json:"usedMemory"`
-//	NumOfCpu                  int   `xml:"numOfCpu" json:"numOfCpu"`
-//	NamespaceOfRegisterServer string   `xml:"namespaceOfRegisterServer" json:"namespaceOfRegisterServer"`
-//	NamespacesOfListeningOn   []string `xml:"namespacesOfListeningOn" json:"namespacesOfListeningOn"`
-//}
+import (
+	"html/template"
+	"time"
+)
 
 type ApplicationResources struct {
 	Applications *Applications `xml:"applications" json:"applications"`
@@ -34,13 +29,13 @@ type EurekaPage struct {
 }
 
 type EurekaInstance struct {
-	Name                 string
-	Available            []*Instance
-	InAvailable          []*Instance
-	AvailableInstances   []string
-	InAvailableInstances []string
-	AMIs                 string
-	AvailabilityZones    int
+	Name              string
+	Available         []*Instance
+	InAvailable       []*Instance
+	AvailableHtml     template.HTML
+	InAvailableHtml   template.HTML
+	AMIs              string
+	AvailabilityZones int
 }
 
 // StatusType is an enum of the different statuses allowed by Eureka.
