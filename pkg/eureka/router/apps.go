@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/choerodon/go-register-server/pkg/eureka/monitor"
+	"github.com/choerodon/go-register-server/pkg/eureka/render"
 	"html/template"
 	"net/http"
 	"path"
@@ -95,10 +95,10 @@ func staticFromQueryParam(req *restful.Request, resp *restful.Response) {
 func (es *EurekaAppsService) home(req *restful.Request, resp *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
 	t, _ := template.ParseFiles("templates/eureka.html")
-	register, eurekaInstances := monitor.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
+	register, eurekaInstances := render.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
 	t.Execute(resp.ResponseWriter, &apps.EurekaPage{
-		GeneralInfo:        monitor.GetGeneralInfo(),
-		InstanceInfo:       monitor.GetInstanceInfo(),
+		GeneralInfo:        render.GetGeneralInfo(),
+		InstanceInfo:       render.GetInstanceInfo(),
 		CurrentTime:        time.Now(),
 		AvailableRegisters: register,
 		EurekaInstances:    eurekaInstances,
