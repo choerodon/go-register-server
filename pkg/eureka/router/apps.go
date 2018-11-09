@@ -33,6 +33,39 @@ func (es *EurekaAppsService) Register() {
 
 	ws := new(restful.WebService)
 
+	ws.Path("/").Produces(restful.MIME_JSON, restful.MIME_XML)
+
+	ws.Route(ws.GET("").To(es.home).Doc("Get home page"))
+
+	ws.Route(ws.GET("/static/{subpath:*}").To(staticFromPathParam))
+
+	ws.Route(ws.GET("/static").To(staticFromQueryParam))
+
+	// GET /eureka/apps
+	ws.Route(ws.GET("eureka/apps").To(es.listEurekaApps).
+		Doc("Get all apps")).Produces("application/json")
+
+	ws.Route(ws.GET("eureka/apps/delta").To(es.listEurekaAppsDelta).
+		Doc("Get all apps delta")).Produces("application/json")
+
+	ws.Route(ws.POST("eureka/apps/{app-name}").To(es.registerEurekaApp).
+		Doc("get a user").Produces("application/json").
+		Param(ws.PathParameter("app-name", "app name").DataType("string")))
+
+	ws.Route(ws.PUT("eureka/apps/{app-name}/{instance-id}").To(es.renew).
+		Doc("renew").
+		Param(ws.PathParameter("app-name", "app name").DataType("string")).
+		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
+	restful.Add(ws)
+}
+
+/*func (es *EurekaAppsService) Register() {
+	glog.Info("Register eureka app APIs")
+
+	ws := new(restful.WebService)
+
+	ws.Path("").Produces(restful.MIME_JSON, restful.MIME_XML)
+
 	ws.Route(ws.GET("/static/{subpath:*}").To(staticFromPathParam))
 
 	ws.Route(ws.GET("/static").To(staticFromQueryParam))
@@ -55,7 +88,7 @@ func (es *EurekaAppsService) Register() {
 		Param(ws.PathParameter("app-name", "app name").DataType("string")).
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 	restful.Add(ws)
-}
+}*/
 
 func (es *EurekaAppsService) listEurekaApps(request *restful.Request, response *restful.Response) {
 	start := time.Now()
