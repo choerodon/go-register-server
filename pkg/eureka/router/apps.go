@@ -32,16 +32,13 @@ func (es *EurekaAppsService) Register() {
 	glog.Info("Register eureka app APIs")
 
 	ws := new(restful.WebService)
-	ws.Path("").Produces(restful.MIME_JSON, restful.MIME_XML)
 
 	ws.Route(ws.GET("/static/{subpath:*}").To(staticFromPathParam))
+
 	ws.Route(ws.GET("/static").To(staticFromQueryParam))
 
 	ws.Route(ws.GET("").To(es.home).
 		Doc("Get home page")).Produces("text/html; charset=utf-8")
-
-	//ws.Route(ws.GET("/lastn").To(es.lastn).
-	//	Doc("Get home page")).Produces("text/html; charset=utf-8")
 
 	ws.Route(ws.GET("/eureka/apps").To(es.listEurekaApps).
 		Doc("Get all apps")).Produces("application/json")
