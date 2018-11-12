@@ -6218,7 +6218,7 @@ strong {
   border-right: 0;
 }
 .navbar a.navbar-brand {
-  background: url("../images/spring-logo-eureka.png") -1px -1px no-repeat;
+  background: url("../images/choerodon-logo.png") -1px -1px no-repeat;
   margin: 12px 0 6px;
   width: 300px;
   height: 46px;
@@ -6230,7 +6230,7 @@ strong {
   display: block;
   width: 300px;
   height: 46px;
-  background: url("../images/spring-logo-eureka.png") -1px -48px no-repeat;
+  background: url("../images/choerodon-logo.png") -1px -48px no-repeat;
   opacity: 0;
   -moz-transition: opacity 0.12s ease-in-out;
   -webkit-transition: opacity 0.12s ease-in-out;
@@ -6285,7 +6285,7 @@ strong {
     width: 200px;
     height: 50px;
     float: none;
-    background: url("../images/spring-logo-eureka-mobile.png") 0 center no-repeat;
+    background: url("../images/choerodon-logo.png") 0 center no-repeat;
   }
   .homepage-billboard .homepage-subtitle {
     font-size: 21px;
