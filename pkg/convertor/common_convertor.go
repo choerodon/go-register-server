@@ -1,12 +1,11 @@
 package convertor
 
 import (
+	"github.com/choerodon/go-register-server/pkg/api/apps"
+	"k8s.io/api/core/v1"
+	"reflect"
 	"strconv"
 	"time"
-
-	"k8s.io/api/core/v1"
-
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
 )
 
 type Status struct {
@@ -89,4 +88,30 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 	}
 
 	return instance
+}
+
+
+// 将递归map转换为简单map
+func ConvertRecursiveMapToSingleMap(recursiveMap map[string]interface{}) map[string]interface{} {
+	singleMap := make(map[string]interface{})
+	recursive(singleMap, "", recursiveMap)
+	return singleMap
+}
+
+func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map[string]interface{}) {
+	for k, v := range recursiveMap {
+		var newKey string
+		if prefix != "" {
+			newKey = prefix + "." + k
+		} else {
+			newKey = k
+		}
+		if reflect.TypeOf(v).Kind() == reflect.Map {
+			newMap := v.(map[string]interface{})
+			recursive(singleMap, newKey, newMap)
+		} else {
+			singleMap[newKey] = v
+		}
+	}
+
 }

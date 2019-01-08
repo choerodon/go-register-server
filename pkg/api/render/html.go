@@ -1,7 +1,7 @@
 package render
 
 import (
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
+	"github.com/choerodon/go-register-server/pkg/api/apps"
 	"html/template"
 )
 

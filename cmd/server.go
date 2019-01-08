@@ -12,9 +12,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/choerodon/go-register-server/cmd/options"
-	"github.com/choerodon/go-register-server/pkg/controller"
-	"github.com/choerodon/go-register-server/pkg/eureka/repository"
-	"github.com/choerodon/go-register-server/pkg/eureka/server"
+	"github.com/choerodon/go-register-server/pkg/api/repository"
+	"github.com/choerodon/go-register-server/pkg/api/server"
+	"github.com/choerodon/go-register-server/pkg/k8s"
 	"github.com/choerodon/go-register-server/pkg/signals"
 )
 
@@ -55,10 +55,10 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 
-	podController := controller.NewController(kubeClient, kubeInformerFactory, appRepo)
+	k8s.RegisterK8sClient = k8s.NewController(kubeClient, kubeInformerFactory, appRepo)
 
 	go kubeInformerFactory.Start(stopCh)
-	go podController.Run(stopCh)
+	go k8s.RegisterK8sClient.Run(stopCh)
 
 	return registerServer.PrepareRun().Run(appRepo, stopCh)
 }

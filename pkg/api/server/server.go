@@ -6,8 +6,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/choerodon/go-register-server/pkg/eureka/repository"
-	"github.com/choerodon/go-register-server/pkg/eureka/router"
+	"github.com/choerodon/go-register-server/pkg/api/repository"
+	"github.com/choerodon/go-register-server/pkg/api/router"
 )
 
 type RegisterServer struct {

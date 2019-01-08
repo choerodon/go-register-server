@@ -1,12 +1,12 @@
 package render
 
 import (
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
+	"github.com/choerodon/go-register-server/pkg/k8s"
+	"github.com/choerodon/go-register-server/pkg/api/apps"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 )
 
 const registerName = "go-register-server"
@@ -41,9 +41,8 @@ func GetIP() string {
 }
 
 func GetNamespace() (string, []string) {
-	listenOn := strings.Split(os.Getenv("REGISTER_SERVICE_NAMESPACE"), ",")
 	server := os.Getenv("REGISTER_SERVER_NAMESPACE")
-	return server, listenOn
+	return server, k8s.MonitoringNamespace
 }
 
 func GetGeneralInfo() map[string]interface{} {

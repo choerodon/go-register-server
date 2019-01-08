@@ -3,7 +3,7 @@ package options
 import (
 	"github.com/spf13/pflag"
 
-	"github.com/choerodon/go-register-server/pkg/eureka/server"
+	"github.com/choerodon/go-register-server/pkg/api/server"
 )
 
 // ServerRunOptions runs a server
