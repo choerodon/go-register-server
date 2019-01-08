@@ -7,12 +7,12 @@ import (
 var (
 	FetchProcessTime = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "eureka_fetch_nanoseconds",
-		Help: "process time per eureka client fetch",
+		Help: "process time per api client fetch",
 	})
 	RequestCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "eureka_ge_total",
-			Help: "Total of the eureka fetch from client.",
+			Help: "Total of the api fetch from client.",
 		},
 		[]string{"path"},
 	)

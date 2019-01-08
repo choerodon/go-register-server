@@ -1,12 +1,12 @@
 package router
 
 import (
-	"github.com/choerodon/go-register-server/pkg/eureka/repository"
+	"github.com/choerodon/go-register-server/pkg/api/repository"
 )
 
 func InitRouters(appRepo *repository.ApplicationRepository) error {
 
-	eurekaAppsService := NewEurekaAppsService(appRepo)
+	eurekaAppsService := newRegisterService(appRepo)
 	eurekaAppsService.Register()
 
 	return nil

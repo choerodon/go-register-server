@@ -5,7 +5,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
+	"github.com/choerodon/go-register-server/pkg/api/apps"
 )
 
 type ApplicationRepository struct {
@@ -32,20 +32,6 @@ func (appRepo *ApplicationRepository) Register(instance *apps.Instance, key stri
 	}
 	appRepo.instanceStore.Store(instance.InstanceId, instance)
 	return true
-
-	//var app *apps.Application
-	//if value, ok := appStore.Load(instance.App); ok {
-	//	app = value.(*apps.Application)
-	//	app.Instances = append(app.Instances, instance)
-	//} else {
-	//	app = &apps.Application{
-	//		Name:      instance.App,
-	//		Instances: make([]*apps.Instance, 0, 10),
-	//	}
-	//	app.Instances = append(app.Instances, instance)
-	//
-	//}
-	//appStore.Store(app.Name, app)
 }
 
 func (appRepo *ApplicationRepository) DeleteInstance(key string) *apps.Instance {

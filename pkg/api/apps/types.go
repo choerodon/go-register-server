@@ -100,3 +100,17 @@ type InstanceMetadata struct {
 }
 
 type RefArray *[1]int
+
+type Environment struct {
+	Name            string           `json:"name"`
+	Label           string           `json:"label"`
+	Version         string           `json:"version"`
+	State           string           `json:"state"`
+	Profiles        []string         `json:"profiles"`
+	PropertySources []PropertySource `json:"propertySources"`
+}
+
+type PropertySource struct {
+	Name   string                 `json:"name"`
+	Source map[string]interface{} `json:"source"`
+}

@@ -1,4 +1,4 @@
-package controller
+package k8s
 
 import (
 	"fmt"
@@ -15,12 +15,20 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/choerodon/go-register-server/pkg/api/apps"
+	"github.com/choerodon/go-register-server/pkg/api/repository"
 	"github.com/choerodon/go-register-server/pkg/convertor"
-	"github.com/choerodon/go-register-server/pkg/eureka/apps"
-	"github.com/choerodon/go-register-server/pkg/eureka/repository"
 	"os"
 	"strings"
 )
+
+var MonitoringNamespace []string
+
+var RegisterK8sClient *Controller
+
+func init() {
+	MonitoringNamespace = strings.Split(os.Getenv("REGISTER_SERVICE_NAMESPACE"), ",")
+}
 
 const (
 	ChoerodonServiceLabel = "choerodon.io/service"
@@ -39,6 +47,8 @@ type Controller struct {
 	workqueue workqueue.RateLimitingInterface
 
 	appRepo *repository.ApplicationRepository
+
+	appNamespace map[string]string
 }
 
 func NewController(
@@ -54,6 +64,7 @@ func NewController(
 		podsSynced:    podInformer.Informer().HasSynced,
 		workqueue:     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods"),
 		appRepo:       appRepo,
+		appNamespace:  make(map[string]string),
 	}
 
 	glog.Info("Setting up event handlers")
@@ -89,7 +100,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	glog.Info("Starting Pod controller")
+	glog.Info("Starting Pod k8s")
 
 	// Wait for the caches to be synced before starting workers
 	glog.Info("Waiting for informer caches to sync")
@@ -97,13 +108,11 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		glog.Error("failed to wait for caches to sync")
 	}
 
-	registerServiceNamespaces := strings.Split(os.Getenv("REGISTER_SERVICE_NAMESPACE"), ",")
-
 	glog.Info("Starting workers")
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
-			for c.processNextWorkItem(registerServiceNamespaces) {
+			for c.processNextWorkItem() {
 			}
 		}, time.Second, stopCh)
 	}
@@ -113,7 +122,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem(registerServiceNamespaces []string) bool {
+func (c *Controller) processNextWorkItem() bool {
 	key, shutdown := c.workqueue.Get()
 
 	if shutdown {
@@ -121,7 +130,7 @@ func (c *Controller) processNextWorkItem(registerServiceNamespaces []string) boo
 	}
 	defer c.workqueue.Done(key)
 
-	forget, err := c.syncHandler(key.(string), registerServiceNamespaces)
+	forget, err := c.syncHandler(key.(string))
 	if err == nil {
 		if forget {
 			c.workqueue.Forget(key)
@@ -134,10 +143,10 @@ func (c *Controller) processNextWorkItem(registerServiceNamespaces []string) boo
 	return true
 }
 
-func (c *Controller) syncHandler(key string, registerServiceNamespaces []string) (bool, error) {
+func (c *Controller) syncHandler(key string) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	matchNum := 0
-	for _, ns := range registerServiceNamespaces {
+	for _, ns := range MonitoringNamespace {
 		if strings.Compare(ns, namespace) == 0 {
 			matchNum ++
 		}
