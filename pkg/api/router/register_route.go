@@ -101,7 +101,7 @@ func staticFromQueryParam(req *restful.Request, resp *restful.Response) {
 
 func (es *RegisterService) home(req *restful.Request, resp *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
-	t := template.Must(template.ParseFiles("templates/api.html"))
+	t := template.Must(template.ParseFiles("templates/eureka.html"))
 	register, eurekaInstances := render.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
 	err := t.Execute(resp.ResponseWriter, &apps.EurekaPage{
 		GeneralInfo:        render.GetGeneralInfo(),
@@ -169,7 +169,7 @@ func (es *RegisterService) getConfig(request *restful.Request, response *restful
 		Profiles:        []string{version},
 		PropertySources: []apps.PropertySource{{Name: service + "-" + version + "-null", Source: trueSourceMap}},
 	}
-	printConfig,_ := json.MarshalIndent(trueSourceMap, "", "  ")
+	printConfig, _ := json.MarshalIndent(trueSourceMap, "", "  ")
 	glog.Infof("%s-%v pull config: %s", service, version, printConfig)
 	err := response.WriteAsJson(env)
 	if err != nil {
