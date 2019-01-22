@@ -1,4 +1,4 @@
-package apps
+package entity
 
 import (
 	"html/template"
@@ -114,3 +114,33 @@ type PropertySource struct {
 	Name   string                 `json:"name"`
 	Source map[string]interface{} `json:"source"`
 }
+
+type CreateConfigDTO struct {
+	Service   string `json:"service" validate:"required"`
+	Version   string `json:"version"`
+	Profile   string `json:"profile" validate:"required"`
+	Namespace string `json:"namespace" validate:"required"`
+	Yaml      string `json:"yaml"`
+}
+
+const (
+	ChoerodonService          = "choerodon.io/service"
+	ChoerodonVersion          = "choerodon.io/version"
+	ChoerodonPort             = "choerodon.io/metrics-port"
+	ChoerodonFeature          = "choerodon.io/feature"
+	ChoerodonFeatureConfig    = "spring-cloud-config"
+	ChoerodonContextPathLabel = "choerodon.io/context-path"
+	DefaultProfile            = "default"
+	RegisterServerName        = "go-register-server"
+	RouteConfigMap            = "zuul-route"
+	ApiGatewayServiceName     = "api-gateway"
+)
+
+var ConfigServerAdditions = map[string]interface{}{
+	"spring.cloud.config.allowOverride":            true,
+	"spring.cloud.config.failFast":                 true,
+	"spring.cloud.config.overrideNone":             false,
+	"spring.cloud.config.overrideSystemProperties": false,
+	"spring.sleuth.integration.enabled":            false,
+	"spring.sleuth.scheduled.enabled":              false,
+	"sampler.percentage":                           1,}

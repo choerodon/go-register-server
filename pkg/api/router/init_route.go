@@ -6,8 +6,7 @@ import (
 
 func InitRouters(appRepo *repository.ApplicationRepository) error {
 
-	eurekaAppsService := newRegisterService(appRepo)
-	eurekaAppsService.Register()
+	Register(appRepo)
 
 	return nil
 }

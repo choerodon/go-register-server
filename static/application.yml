@@ -1,0 +1,14 @@
+register:
+  service:
+    namespace:
+      - io-choerodon
+  server:
+    namespace: io-choerodon
+config:
+  server:
+    enabled: true
+    gateway:
+      names:
+        - api-gateway
+        - gateway-helper
+kubeconfig: /Users/jcalaz/.kube/config

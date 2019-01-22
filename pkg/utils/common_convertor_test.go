@@ -1,4 +1,4 @@
-package convertor
+package utils
 
 import (
 	"fmt"
