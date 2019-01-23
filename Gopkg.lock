@@ -45,6 +45,14 @@
   version = "v2.6.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:149e20c40f3caebf6eba197c537c111594d3e9f6bd62820664fb03aec2e0fb9e"
+  name = "github.com/flyleft/gprofile"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "4c613f8741333f57b89aa58ae860ae17bbe046be"
+
+[[projects]]
   digest = "1:81466b4218bf6adddac2572a30ac733a9255919bc2f470b4827a317bd4ee1756"
   name = "github.com/ghodss/yaml"
   packages = ["."]
@@ -83,6 +91,25 @@
   packages = ["."]
   pruneopts = "NUT"
   revision = "ceb469cb0fdf2d792f28d771bc05da6c606f55e5"
+
+[[projects]]
+  digest = "1:1c109e91a99627f9c80e8794d80773c8532dfcf234b45cdb6a6388b30a5bb5e7"
+  name = "github.com/go-playground/locales"
+  packages = [
+    ".",
+    "currency",
+  ]
+  pruneopts = "NUT"
+  revision = "f63010822830b6fe52288ee52d5a1151088ce039"
+  version = "v0.12.1"
+
+[[projects]]
+  digest = "1:1683152827ebac377858b53a6ad0be90fb1711061c7e580c5dc719834a349162"
+  name = "github.com/go-playground/universal-translator"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "b32fa301c9fe55953584134cb6853a13c87ec0a1"
+  version = "v0.16.0"
 
 [[projects]]
   digest = "1:1b3dd24f14a5280710fc7a3aa2480b6e4d20fdfc905841de9a3aa2aa2f1d4ee9"
@@ -208,6 +235,14 @@
   version = "1.0.1"
 
 [[projects]]
+  digest = "1:c41a98ec16b8b053f921ad36d510f552321d6c86d2cd46d15b0ef3b85e67dd5f"
+  name = "github.com/leodido/go-urn"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "70078a794e8ea4b497ba7c19a78cd60f90ccf0f4"
+  version = "v1.1.0"
+
+[[projects]]
   branch = "master"
   digest = "1:c191c899f253fbcb5e93730777712207aa41f024c375e07971be9607c2e73e1d"
   name = "github.com/mailru/easyjson"
@@ -242,6 +277,14 @@
   pruneopts = "NUT"
   revision = "1df9eeb2bb81f327b96228865c5687bc2194af3f"
   version = "1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:d9f5a00f5ea0bfdf379d89b69af41b3cb358528ac877cb5a4fa65cc12490daad"
+  name = "github.com/olebedev/config"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "57f804269e64d41bfe46efb76232c47f49d40902"
 
 [[projects]]
   branch = "master"
@@ -375,6 +418,14 @@
   pruneopts = "NUT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
+
+[[projects]]
+  digest = "1:ce77b60a5a960206e689e397af69f7e60df7d03d310a4062c72da623ec16f754"
+  name = "gopkg.in/go-playground/validator.v9"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "cdd5c28d217804eec51fa694927e6c57465748f6"
+  version = "v9.25.0"
 
 [[projects]]
   digest = "1:ef72505cf098abdd34efeea032103377bec06abb61d8a06f002d5d296a4b1185"
@@ -612,13 +663,17 @@
   analyzer-version = 1
   input-imports = [
     "github.com/emicklei/go-restful",
+    "github.com/flyleft/gprofile",
+    "github.com/ghodss/yaml",
     "github.com/golang/glog",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
+    "gopkg.in/go-playground/validator.v9",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/informers",

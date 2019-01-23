@@ -1,7 +1,7 @@
-package convertor
+package utils
 
 import (
-	"github.com/choerodon/go-register-server/pkg/api/apps"
+	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"k8s.io/api/core/v1"
 	"reflect"
 	"strconv"
@@ -15,22 +15,18 @@ type Status struct {
 }
 
 const (
-	ChoerodonServiceLabel = "choerodon.io/service"
-	ChoerodonVersionLabel = "choerodon.io/version"
-	ChoerodonContextPathLabel = "choerodon.io/context-path"
-	ChoerodonPortLabel    = "choerodon.io/metrics-port"
-	UP                    = "UP"
-	DOWN                  = "DOWN"
-	UNKNOWN               = "UNKNOWN"
-	dataCentreClass       = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
-	dataCentreName        = "MyOwn"
+	UP              = "UP"
+	DOWN            = "DOWN"
+	UNKNOWN         = "UNKNOWN"
+	dataCentreClass = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
+	dataCentreName  = "MyOwn"
 )
 
-func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
+func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
 
 	now := uint64(time.Now().Unix())
-	managementPort := pod.Labels[ChoerodonPortLabel]
-	serviceName := pod.Labels[ChoerodonServiceLabel]
+	managementPort := pod.Labels[entity.ChoerodonPort]
+	serviceName := pod.Labels[entity.ChoerodonService]
 	var port int32
 	if container := pod.Spec.Containers[0]; len(container.Ports) > 0 {
 		port = pod.Spec.Containers[0].Ports[0].ContainerPort
@@ -40,18 +36,18 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 	homePage := "http://" + pod.Status.PodIP + ":" + strconv.Itoa(int(port)) + "/"
 	statusPageUrl := "http://" + pod.Status.PodIP + ":" + managementPort + "/info"
 	healthCheckUrl := "http://" + pod.Status.PodIP + ":" + managementPort + "/health"
-	instance := &apps.Instance{
+	instance := &entity.Instance{
 		HostName:         pod.Status.PodIP,
 		App:              serviceName,
 		IPAddr:           pod.Status.PodIP,
 		Status:           UP,
 		InstanceId:       instanceId,
 		OverriddenStatus: UNKNOWN,
-		Port: apps.Port{
+		Port: entity.Port{
 			Port:    port,
 			Enabled: true,
 		},
-		SecurePort: apps.Port{
+		SecurePort: entity.Port{
 			Port:    443,
 			Enabled: false,
 		},
@@ -62,7 +58,7 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 		IsCoordinatingDiscoveryServer: true,
 		SecureVipAddress:              serviceName,
 		VipAddress:                    serviceName,
-		DataCenterInfo: apps.DataCenterInfo{
+		DataCenterInfo: entity.DataCenterInfo{
 			Class: dataCentreClass,
 			Name:  dataCentreName,
 		},
@@ -70,15 +66,15 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 		StatusPageUrl:  statusPageUrl,
 		HealthCheckUrl: healthCheckUrl,
 	}
-	metedata := make(map[string]string)
-	metedata["VERSION"] = pod.Labels[ChoerodonVersionLabel]
-	contextPath, ok := pod.Labels[ChoerodonContextPathLabel]
+	meteData := make(map[string]string)
+	meteData["VERSION"] = pod.Labels[entity.ChoerodonVersion]
+	contextPath, ok := pod.Labels[entity.ChoerodonContextPathLabel]
 	if ok {
-		metedata["CONTEXT-PATH"] = contextPath
+		meteData["CONTEXT-PATH"] = contextPath
 	}
 
-	instance.Metadata = metedata
-	instance.LeaseInfo = apps.LeaseInfo{
+	instance.Metadata = meteData
+	instance.LeaseInfo = entity.LeaseInfo{
 		RenewalIntervalInSecs: 10,
 		RegistrationTimestamp: now,
 		DurationInSecs:        90,
@@ -90,6 +86,14 @@ func ConvertPod2Instance(pod *v1.Pod) *apps.Instance {
 	return instance
 }
 
+func Contain(m map[string]interface{}, k string) bool {
+	for mk := range m {
+		if mk == k {
+			return true
+		}
+	}
+	return false
+}
 
 // 将递归map转换为简单map
 func ConvertRecursiveMapToSingleMap(recursiveMap map[string]interface{}) map[string]interface{} {
@@ -97,7 +101,6 @@ func ConvertRecursiveMapToSingleMap(recursiveMap map[string]interface{}) map[str
 	recursive(singleMap, "", recursiveMap)
 	return singleMap
 }
-
 func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map[string]interface{}) {
 	for k, v := range recursiveMap {
 		var newKey string
@@ -106,6 +109,9 @@ func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map
 		} else {
 			newKey = k
 		}
+		if v == nil {
+			continue
+		}
 		if reflect.TypeOf(v).Kind() == reflect.Map {
 			newMap := v.(map[string]interface{})
 			recursive(singleMap, newKey, newMap)
@@ -113,5 +119,4 @@ func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map
 			singleMap[newKey] = v
 		}
 	}
-
 }

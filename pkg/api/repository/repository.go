@@ -1,11 +1,9 @@
 package repository
 
 import (
-	"sync"
-
+	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"github.com/golang/glog"
-
-	"github.com/choerodon/go-register-server/pkg/api/apps"
+	"sync"
 )
 
 type ApplicationRepository struct {
@@ -22,7 +20,7 @@ func NewApplicationRepository() *ApplicationRepository {
 	}
 }
 
-func (appRepo *ApplicationRepository) Register(instance *apps.Instance, key string) bool {
+func (appRepo *ApplicationRepository) Register(instance *entity.Instance, key string) bool {
 	//appStore := appRepo.applicationStore
 
 	if _, ok := appRepo.namespaceStore.Load(key); ok {
@@ -34,14 +32,14 @@ func (appRepo *ApplicationRepository) Register(instance *apps.Instance, key stri
 	return true
 }
 
-func (appRepo *ApplicationRepository) DeleteInstance(key string) *apps.Instance {
+func (appRepo *ApplicationRepository) DeleteInstance(key string) *entity.Instance {
 	if value, ok := appRepo.namespaceStore.Load(key); ok {
 		instance, _ := appRepo.instanceStore.Load(value)
 		appRepo.instanceStore.Delete(value)
 		appRepo.namespaceStore.Delete(key)
 		if instance != nil {
 			glog.Infof("Delete instance by key %s", key)
-			return instance.(*apps.Instance)
+			return instance.(*entity.Instance)
 		}
 		glog.Infof(" instance by key %s not exist but namespace exist", key)
 	} else {
@@ -51,21 +49,21 @@ func (appRepo *ApplicationRepository) DeleteInstance(key string) *apps.Instance 
 
 }
 
-func (appRepo *ApplicationRepository) GetApplicationResources() *apps.ApplicationResources {
-	appResource := &apps.ApplicationResources{
-		Applications: &apps.Applications{
+func (appRepo *ApplicationRepository) GetApplicationResources() *entity.ApplicationResources {
+	appResource := &entity.ApplicationResources{
+		Applications: &entity.Applications{
 			VersionsDelta:   2,
 			AppsHashcode:    "app_hashcode",
-			ApplicationList: make([]*apps.Application, 0, 10),
+			ApplicationList: make([]*entity.Application, 0, 10),
 		},
 	}
-	appMap := make(map[string]*apps.Application)
+	appMap := make(map[string]*entity.Application)
 	appRepo.instanceStore.Range(func(instanceId, value interface{}) bool {
-		instance := value.(*apps.Instance)
+		instance := value.(*entity.Instance)
 		if appMap[instance.App] == nil {
-			app := &apps.Application{
+			app := &entity.Application{
 				Name:      instance.App,
-				Instances: make([]*apps.Instance, 0, 10),
+				Instances: make([]*entity.Instance, 0, 10),
 			}
 			app.Instances = append(app.Instances, instance)
 			appMap[instance.App] = app
@@ -80,7 +78,7 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *apps.Applicatio
 
 	appStore := appRepo.applicationStore
 	appStore.Range(func(key, value interface{}) bool {
-		app := value.(*apps.Application)
+		app := value.(*entity.Application)
 		appResource.Applications.ApplicationList = append(appResource.Applications.ApplicationList, app)
 		return true
 	})
@@ -88,10 +86,22 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *apps.Applicatio
 
 }
 
-func (appRepo *ApplicationRepository) Renew(appName string, instanceId string) apps.Instance {
+func (appRepo *ApplicationRepository) Renew(appName string, instanceId string) entity.Instance {
 	if value, ok := appRepo.applicationStore.Load(appName); ok {
-		app := value.(*apps.Application)
+		app := value.(*entity.Application)
 		return *app.Instances[0]
 	}
-	return apps.Instance{}
+	return entity.Instance{}
+}
+
+func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []string {
+	instances := make([]string, 0, 10)
+	appRepo.instanceStore.Range(func(instanceId, value interface{}) bool {
+		instance := value.(*entity.Instance)
+		if instance.App == service && instance.Status == "UP" {
+			instances = append(instances, instance.HomePageUrl)
+		}
+		return true
+	})
+	return instances
 }
