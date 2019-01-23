@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"gopkg.in/go-playground/validator.v9"
 	"html/template"
 	"time"
 )
@@ -115,12 +116,13 @@ type PropertySource struct {
 	Source map[string]interface{} `json:"source"`
 }
 
-type CreateConfigDTO struct {
-	Service   string `json:"service" validate:"required"`
-	Version   string `json:"version"`
-	Profile   string `json:"profile" validate:"required"`
-	Namespace string `json:"namespace" validate:"required"`
-	Yaml      string `json:"yaml"`
+type SaveConfigDTO struct {
+	Service      string `json:"service" validate:"required"`
+	Version      string `json:"version"`
+	Profile      string `json:"profile" validate:"required"`
+	Namespace    string `json:"namespace" validate:"required"`
+	Yaml         string `json:"yaml"`
+	UpdatePolicy string `json:"updatePolicy" validate:"updatePolicy"`
 }
 
 const (
@@ -136,6 +138,12 @@ const (
 	ApiGatewayServiceName     = "api-gateway"
 )
 
+const (
+	UpdatePolicyAdd      = "add"
+	UpdatePolicyNot      = "not"
+	UpdatePolicyOverride = "override"
+)
+
 var ConfigServerAdditions = map[string]interface{}{
 	"spring.cloud.config.allowOverride":            true,
 	"spring.cloud.config.failFast":                 true,
@@ -144,3 +152,8 @@ var ConfigServerAdditions = map[string]interface{}{
 	"spring.sleuth.integration.enabled":            false,
 	"spring.sleuth.scheduled.enabled":              false,
 	"sampler.percentage":                           1,}
+
+func ValidateUpdatePolicy(fl validator.FieldLevel) bool {
+	v := fl.Field().String()
+	return v == UpdatePolicyAdd || v == UpdatePolicyNot || v == UpdatePolicyOverride
+}

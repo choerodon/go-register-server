@@ -51,8 +51,8 @@ func Register(appRepo *repository.ApplicationRepository) {
 		// 拉取配置
 		ws.Route(ws.GET("{service}/{version}").To(cs.Poll).
 			Doc("Get config")).Produces("application/json")
-		// 创建配置
-		ws.Route(ws.POST("configs").To(cs.Create).
+		// 创建配置或者更新配置
+		ws.Route(ws.POST("configs").To(cs.Save).
 			Doc("Create a config").Produces("application/json"))
 
 	}

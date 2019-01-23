@@ -86,13 +86,21 @@ func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
 	return instance
 }
 
+func Contain(m map[string]interface{}, k string) bool {
+	for mk := range m {
+		if mk == k {
+			return true
+		}
+	}
+	return false
+}
+
 // 将递归map转换为简单map
 func ConvertRecursiveMapToSingleMap(recursiveMap map[string]interface{}) map[string]interface{} {
 	singleMap := make(map[string]interface{})
 	recursive(singleMap, "", recursiveMap)
 	return singleMap
 }
-
 func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map[string]interface{}) {
 	for k, v := range recursiveMap {
 		var newKey string

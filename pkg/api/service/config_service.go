@@ -27,76 +27,115 @@ func NewConfigService(appRepo *repository.ApplicationRepository) *ConfigService 
 		Validate: validator.New(),
 		appRepo:  appRepo,
 	}
+	_ = s.Validate.RegisterValidation("updatePolicy", entity.ValidateUpdatePolicy)
 	return s
 }
 
-func (es *ConfigService) Create(request *restful.Request, response *restful.Response) {
+func (es *ConfigService) Save(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
-	dto := new(entity.CreateConfigDTO)
+	dto := new(entity.SaveConfigDTO)
 	err := request.ReadEntity(&dto)
 	if err != nil {
-		glog.Warningf("Create config readEntity error", err)
-		_ = response.WriteErrorString(400, "invalid create configMap dto")
+		glog.Warningf("Save config failed when readEntity", err)
+		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
 		return
 	}
 	err = es.Validate.Struct(dto)
 	if err != nil {
-		glog.Warningf("Create config invalid dto", err)
-		_ = response.WriteErrorString(400, "invalid create configMap dto")
+		glog.Warningf("Save config failed cause of invalid saveConfigDTO", err)
+		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
 		return
 	}
-
 	source := make(map[string]interface{})
 	err = yaml.Unmarshal([]byte(dto.Yaml), &source)
 	if err != nil {
-		glog.Warningf("Create config invalid yaml", err)
+		glog.Warningf("Save config failed cause of invalid yaml", err)
 		_ = response.WriteErrorString(400, "invalid yaml")
 		return
 	}
 
 	if dto.Service == entity.ApiGatewayServiceName {
-		err = es.createZuulRoutes(source, dto)
+		gb, rb, rm, err := separateRoute(source)
 		if err != nil {
-			glog.Warningf("Create config failed when create zuul route", err)
-			_ = response.WriteErrorString(500, "create zuul-route configMap failed")
+			glog.Warningf("Save config failed when separateRoute", err)
+			_ = response.WriteErrorString(500, "separateRoute error")
+			return
+		}
+		dto.Yaml = gb
+		routeDTO := &entity.SaveConfigDTO{
+			Service:      entity.RouteConfigMap,
+			Version:      dto.Version,
+			Profile:      entity.DefaultProfile,
+			Namespace:    dto.Namespace,
+			UpdatePolicy: dto.UpdatePolicy,
+			Yaml:         rb,
+		}
+		createOrUpdateConfigMap(routeDTO, rm, response)
+	}
+	createOrUpdateConfigMap(dto, source, response)
+}
+
+func createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interface{}, response *restful.Response) {
+	queryConfigMap := k8s.RegisterK8sClient.QueryConfigMap(dto.Service, dto.Namespace)
+	if queryConfigMap == nil {
+		_, err := k8s.RegisterK8sClient.CreateConfigMap(dto)
+		if err != nil {
+			glog.Warningf("Save config failed when create configMap", err)
+			_ = response.WriteErrorString(500, "create configMap failed")
 			return
 		}
 	}
-	_, err = k8s.RegisterK8sClient.CreateOrUpdateConfigMap(dto)
-	if err != nil {
-		glog.Warningf("Create failed when operator configMap", err)
-		_ = response.WriteErrorString(500, "create configMap failed")
+	if dto.UpdatePolicy == entity.UpdatePolicyAdd {
+		profileKey := utils.ConfigMapProfileKey(dto.Profile)
+		oldYaml := queryConfigMap.Data[profileKey]
+		if oldYaml != "" {
+			newYaml, err := addProperty(oldYaml, source)
+			if err != nil {
+				glog.Warningf("Save config failed when merge yaml", err)
+				_ = response.WriteErrorString(500, "merge yaml failed")
+				return
+			}
+			dto.Yaml = newYaml
+		}
 	}
-
+	if dto.UpdatePolicy != entity.UpdatePolicyNot {
+		_, err := k8s.RegisterK8sClient.UpdateConfigMap(dto)
+		if err != nil {
+			glog.Warningf("Save config failed when update configMap", err)
+			_ = response.WriteErrorString(500, "update configMap failed")
+			return
+		}
+	}
 }
 
-func (es *ConfigService) createZuulRoutes(gatewayConfig map[string]interface{}, gatewayDTO *entity.CreateConfigDTO) error {
-	gatewayWithoutRouteMap, routeMap := separateRoute(gatewayConfig)
-	routeBytes, err := yaml.Marshal(routeMap)
+func addProperty(oldYaml string, newMap map[string]interface{}) (string, error) {
+	oldMap := make(map[string]interface{})
+	err := yaml.Unmarshal([]byte(oldYaml), &oldMap)
 	if err != nil {
-		return err
+		return "", nil
 	}
-	_, err = k8s.RegisterK8sClient.CreateOrUpdateConfigMap(&entity.CreateConfigDTO{
-		Service:   entity.RouteConfigMap,
-		Version:   gatewayDTO.Version,
-		Profile:   entity.DefaultProfile,
-		Namespace: gatewayDTO.Namespace,
-		Yaml:      string(routeBytes),
-	})
+	recursiveAdd(oldMap, newMap)
+	data, err := yaml.Marshal(oldMap)
 	if err != nil {
-		return err
+		return "", err
 	}
-	gatewayWithoutRouteMapBytes, err := yaml.Marshal(gatewayWithoutRouteMap)
-	if err != nil {
-		return err
-	}
-	gatewayDTO.Yaml = string(gatewayWithoutRouteMapBytes)
-	return nil
+	return string(data), nil
 }
 
-func separateRoute(gatewayConfig map[string]interface{}) (map[string]interface{}, map[string]interface{}) {
+func recursiveAdd(oldMap map[string]interface{}, newMap map[string]interface{}) {
+	for nk, nv := range newMap {
+		ov := oldMap[nk]
+		if !utils.Contain(oldMap, nk) {
+			oldMap[nk] = nv
+		} else if nv != nil && reflect.TypeOf(nv).Kind() == reflect.Map && ov != nil && reflect.TypeOf(ov).Kind() == reflect.Map {
+			recursiveAdd(ov.(map[string]interface{}), nv.(map[string]interface{}))
+		}
+	}
+}
+
+func separateRoute(gateway map[string]interface{}) (string, string, map[string]interface{}, error) {
 	routeMap := make(map[string]interface{})
-	for k, v := range gatewayConfig {
+	for k, v := range gateway {
 		if k == "zuul" && reflect.TypeOf(v).Kind() == reflect.Map {
 			vm := v.(map[string]interface{})
 			for rk, rv := range vm {
@@ -107,7 +146,16 @@ func separateRoute(gatewayConfig map[string]interface{}) (map[string]interface{}
 			}
 		}
 	}
-	return gatewayConfig, map[string]interface{}{"zuul": routeMap}
+	gb, err := yaml.Marshal(gateway)
+	if err != nil {
+		return "", "", nil, err
+	}
+	rm := map[string]interface{}{"zuul": routeMap}
+	rb, err := yaml.Marshal(rm)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return string(gb), string(rb), rm, nil
 }
 
 func (es *ConfigService) Poll(request *restful.Request, response *restful.Response) {
@@ -122,14 +170,14 @@ func (es *ConfigService) Poll(request *restful.Request, response *restful.Respon
 		_ = response.WriteErrorString(400, "version is empty")
 		return
 	}
-	kvMap, configMapVersion, err := es.getConfigFromConfigMap(service, version)
+	kvMap, configMapVersion, err := getConfigFromConfigMap(service, version)
 	if err != nil {
 		_ = response.WriteErrorString(404, "can't find correct configMap")
 		glog.Warningf("Get config from configMap failed, service: %s", service, err)
 		return
 	}
 	if isGateway(service) {
-		routeMap, _, err := es.getConfigFromConfigMap(entity.RouteConfigMap, version)
+		routeMap, _, err := getConfigFromConfigMap(entity.RouteConfigMap, version)
 		if err != nil {
 			_ = response.WriteErrorString(404, "can't find zuul-route configMap")
 			glog.Warningf("Get zuul-route from configMap failed", err)
@@ -139,7 +187,7 @@ func (es *ConfigService) Poll(request *restful.Request, response *restful.Respon
 			kvMap[k] = v
 		}
 	}
-	es.appendAddition(kvMap)
+	appendConfigServerAddition(kvMap)
 	env := &entity.Environment{
 		Name:            service,
 		Version:         configMapVersion,
@@ -154,15 +202,15 @@ func (es *ConfigService) Poll(request *restful.Request, response *restful.Respon
 	}
 }
 
-func (es *ConfigService) appendAddition(kvMap map[string]interface{}) {
+func appendConfigServerAddition(kvMap map[string]interface{}) {
 	for k, v := range entity.ConfigServerAdditions {
 		kvMap[k] = v
 	}
 }
 
-func (es *ConfigService) getConfigFromConfigMap(service string, version string) (map[string]interface{}, string, error) {
+func getConfigFromConfigMap(service string, version string) (map[string]interface{}, string, error) {
 	source := make(map[string]interface{})
-	configMap := k8s.RegisterK8sClient.GetConfigMapByName(service)
+	configMap := k8s.RegisterK8sClient.QueryConfigMapByName(service)
 	if configMap == nil {
 		return nil, "", errors.New("can't find configMap")
 	}
