@@ -17,13 +17,18 @@ import (
 	"reflect"
 )
 
-type ConfigService struct {
+type ConfigService interface {
+	Save(request *restful.Request, response *restful.Response)
+	Poll(request *restful.Request, response *restful.Response)
+}
+
+type ConfigServiceImpl struct {
 	Validate *validator.Validate
 	appRepo  *repository.ApplicationRepository
 }
 
-func NewConfigService(appRepo *repository.ApplicationRepository) *ConfigService {
-	s := &ConfigService{
+func NewConfigServiceImpl(appRepo *repository.ApplicationRepository) *ConfigServiceImpl {
+	s := &ConfigServiceImpl{
 		Validate: validator.New(),
 		appRepo:  appRepo,
 	}
@@ -31,7 +36,7 @@ func NewConfigService(appRepo *repository.ApplicationRepository) *ConfigService 
 	return s
 }
 
-func (es *ConfigService) Save(request *restful.Request, response *restful.Response) {
+func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	dto := new(entity.SaveConfigDTO)
 	err := request.ReadEntity(&dto)
@@ -158,7 +163,7 @@ func separateRoute(gateway map[string]interface{}) (string, string, map[string]i
 	return string(gb), string(rb), rm, nil
 }
 
-func (es *ConfigService) Poll(request *restful.Request, response *restful.Response) {
+func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	service := request.PathParameter("service")
 	if service == "" {
