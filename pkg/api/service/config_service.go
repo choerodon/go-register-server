@@ -90,6 +90,12 @@ func createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interf
 			return
 		}
 	}
+	if queryConfigMap != nil && dto.UpdatePolicy == entity.UpdatePolicyNot {
+		glog.Infof("configMap %s is already exist", dto.Service)
+		_ = response.WriteErrorString(304, "configMap is already exist")
+		return
+	}
+
 	if dto.UpdatePolicy == entity.UpdatePolicyAdd {
 		profileKey := utils.ConfigMapProfileKey(dto.Profile)
 		oldYaml := queryConfigMap.Data[profileKey]
