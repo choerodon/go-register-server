@@ -1,6 +1,8 @@
 package embed
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/flyleft/gprofile"
 )
 
@@ -15,6 +17,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	printConfig, _ := json.MarshalIndent(Env, "", "  ")
+	fmt.Printf("Application config: %s", printConfig)
 }
 
 type Config struct {

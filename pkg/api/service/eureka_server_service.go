@@ -10,18 +10,24 @@ import (
 	"time"
 )
 
-type EurekaServerService struct {
+type EurekaServerService interface {
+	Apps(request *restful.Request, response *restful.Response)
+	AppsDelta(request *restful.Request, response *restful.Response)
+	Register(request *restful.Request, response *restful.Response)
+	Renew(request *restful.Request, response *restful.Response)
+}
+type EurekaServerServiceImpl struct {
 	appRepo *repository.ApplicationRepository
 }
 
-func NewEurekaServerService(appRepo *repository.ApplicationRepository) *EurekaServerService {
-	s := &EurekaServerService{
+func NewEurekaServerServiceImpl(appRepo *repository.ApplicationRepository) *EurekaServerServiceImpl {
+	s := &EurekaServerServiceImpl{
 		appRepo: appRepo,
 	}
 	return s
 }
 
-func (es *EurekaServerService) Apps(request *restful.Request, response *restful.Response) {
+func (es *EurekaServerServiceImpl) Apps(request *restful.Request, response *restful.Response) {
 	start := time.Now()
 
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
@@ -34,7 +40,7 @@ func (es *EurekaServerService) Apps(request *restful.Request, response *restful.
 	metrics.FetchProcessTime.Set(float64(cost))
 }
 
-func (es *EurekaServerService) AppsDelta(request *restful.Request, response *restful.Response) {
+func (es *EurekaServerServiceImpl) AppsDelta(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	applicationResources := &entity.ApplicationResources{
 		Applications: &entity.Applications{
@@ -46,11 +52,11 @@ func (es *EurekaServerService) AppsDelta(request *restful.Request, response *res
 	_ = response.WriteAsJson(applicationResources)
 }
 
-func (es *EurekaServerService) Register(request *restful.Request, response *restful.Response) {
+func (es *EurekaServerServiceImpl) Register(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	glog.Info("Receive registry from ", request.PathParameter("app-name"))
 }
 
-func (es *EurekaServerService) Renew(request *restful.Request, response *restful.Response) {
+func (es *EurekaServerServiceImpl) Renew(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 }

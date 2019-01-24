@@ -15,21 +15,25 @@ import (
 	"time"
 )
 
-type EurekaPageService struct {
+type EurekaPageService interface {
+	HomePage(req *restful.Request, resp *restful.Response)
+}
+
+type EurekaPageServiceImpl struct {
 	appRepo *repository.ApplicationRepository
 }
 
-func NewEurekaPageService(appRepo *repository.ApplicationRepository) *EurekaPageService {
-	return &EurekaPageService{appRepo: appRepo}
+func NewEurekaPageServiceImpl(appRepo *repository.ApplicationRepository) *EurekaPageServiceImpl {
+	return &EurekaPageServiceImpl{appRepo: appRepo}
 }
 
-func (es *EurekaPageService) HomePage(req *restful.Request, resp *restful.Response) {
+func (es *EurekaPageServiceImpl) HomePage(req *restful.Request, resp *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": req.Request.RequestURI}).Inc()
 	t := template.Must(template.ParseFiles("templates/eureka.html"))
-	register, eurekaInstances := es.GetEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
+	register, eurekaInstances := getEurekaApplicationInfos(es.appRepo.GetApplicationResources().Applications.ApplicationList)
 	err := t.Execute(resp.ResponseWriter, &entity.EurekaPage{
-		GeneralInfo:        es.GetGeneralInfo(),
-		InstanceInfo:       es.GetInstanceInfo(),
+		GeneralInfo:        getGeneralInfo(),
+		InstanceInfo:       getInstanceInfo(),
 		CurrentTime:        time.Now(),
 		AvailableRegisters: register,
 		EurekaInstances:    eurekaInstances,
@@ -39,7 +43,7 @@ func (es *EurekaPageService) HomePage(req *restful.Request, resp *restful.Respon
 	}
 }
 
-func (es *EurekaPageService) InstanceHtml(instances []*entity.Instance) template.HTML {
+func instanceHtml(instances []*entity.Instance) template.HTML {
 	html := ""
 	for i := 0; i < len(instances); i++ {
 		html = html + "<a href=\"" + instances[i].StatusPageUrl +
@@ -48,11 +52,11 @@ func (es *EurekaPageService) InstanceHtml(instances []*entity.Instance) template
 	return template.HTML(html)
 }
 
-func (es *EurekaPageService) GetCpuNum() int {
+func getCpuNum() int {
 	return runtime.NumCPU()
 }
 
-func (es *EurekaPageService) GetMemUsage() string {
+func getMemUsage() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	return strconv.Itoa(bToMb(m.Sys)) + "MiB"
@@ -62,7 +66,7 @@ func bToMb(b uint64) int {
 	return int(b) / 1024 / 1024
 }
 
-func (es *EurekaPageService) GetIP() string {
+func getIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
@@ -77,22 +81,22 @@ func (es *EurekaPageService) GetIP() string {
 	return ""
 }
 
-func (es *EurekaPageService) GetGeneralInfo() map[string]interface{} {
+func getGeneralInfo() map[string]interface{} {
 	info := make(map[string]interface{})
-	info["NumOfCpu"] = es.GetCpuNum()
-	info["UsedMemory"] = es.GetMemUsage()
+	info["NumOfCpu"] = getCpuNum()
+	info["UsedMemory"] = getMemUsage()
 	info["NamespaceOfRegisterServer"] = embed.Env.RegisterServerNamespace
 	info["NamespacesOfListeningOn"] = embed.Env.RegisterServiceNamespace
 	return info
 }
 
-func (es *EurekaPageService) GetInstanceInfo() map[string]interface{} {
+func getInstanceInfo() map[string]interface{} {
 	info := make(map[string]interface{})
-	info["IpAddr"] = es.GetIP()
+	info["IpAddr"] = getIP()
 	return info
 }
 
-func (es *EurekaPageService) GetEurekaApplicationInfos(list []*entity.Application) ([]*entity.Instance, []*entity.EurekaInstance) {
+func getEurekaApplicationInfos(list []*entity.Application) ([]*entity.Instance, []*entity.EurekaInstance) {
 	infos := make([]*entity.EurekaInstance, 0)
 	var register []*entity.Instance
 	for _, value := range list {
@@ -105,8 +109,8 @@ func (es *EurekaPageService) GetEurekaApplicationInfos(list []*entity.Applicatio
 			AvailabilityZones: availableSize,
 			Available:         available,
 			InAvailable:       inAvailable,
-			AvailableHtml:     es.InstanceHtml(available),
-			InAvailableHtml:   es.InstanceHtml(inAvailable),
+			AvailableHtml:     instanceHtml(available),
+			InAvailableHtml:   instanceHtml(inAvailable),
 		})
 		if value.Name == entity.RegisterServerName {
 			register = available

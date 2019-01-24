@@ -12,9 +12,9 @@ import (
 
 func Register(appRepo *repository.ApplicationRepository) {
 
-	rs := service.NewEurekaServerService(appRepo)
+	rs := service.NewEurekaServerServiceImpl(appRepo)
 
-	ps := service.NewEurekaPageService(appRepo)
+	ps := service.NewEurekaPageServiceImpl(appRepo)
 
 	glog.Info("Register eureka app APIs")
 
@@ -47,7 +47,7 @@ func Register(appRepo *repository.ApplicationRepository) {
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 
 	if embed.Env.ConfigServer.Enabled {
-		cs := service.NewConfigService(appRepo)
+		cs := service.NewConfigServiceImpl(appRepo)
 		// 拉取配置
 		ws.Route(ws.GET("{service}/{version}").To(cs.Poll).
 			Doc("Get config")).Produces("application/json")
