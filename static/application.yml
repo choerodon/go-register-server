@@ -11,4 +11,4 @@ config:
       names:
         - api-gateway
         - gateway-helper
-kubeconfig: /Users/jcalaz/.kube/config
+kubeconfig: /.kube/config
