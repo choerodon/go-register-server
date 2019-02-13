@@ -1,23 +1,63 @@
 package k8s
 
 import (
+	"fmt"
 	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"github.com/choerodon/go-register-server/pkg/embed"
 	"github.com/choerodon/go-register-server/pkg/utils"
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	coreV1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/cache"
+	"sync"
 )
 
-func (c *Controller) QueryConfigMapByName(name string) *v1.ConfigMap {
+var ConfigMapClient ConfigMapOperator
+
+type ConfigMapOperator interface {
+	QueryConfigMapByName(name string) *v1.ConfigMap
+	CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error)
+	UpdateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error)
+	QueryConfigMap(name string, namespace string) *v1.ConfigMap
+	StartMonitor()
+}
+
+func NewConfigMapOperator() ConfigMapOperator {
+	if ConfigMapClient == nil {
+		ConfigMapClient = &ConfigMapOperatorImpl{
+			appNamespace: &sync.Map{},
+			kubeV1Client: KubeClient.CoreV1(),
+		}
+	}
+	return ConfigMapClient
+}
+
+type ConfigMapOperatorImpl struct {
+	appNamespace *sync.Map
+	kubeV1Client coreV1.CoreV1Interface
+}
+
+func (c *ConfigMapOperatorImpl) StartMonitor() {
+  KubeInformerFactory.Core().V1().ConfigMaps().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	  UpdateFunc: c.ConfigMapUpdateEvent,
+  })
+}
+
+func (c *ConfigMapOperatorImpl) ConfigMapUpdateEvent(oldObj, newObj interface{}) {
+   fmt.Println(oldObj, newObj)
+
+}
+
+func (c *ConfigMapOperatorImpl) QueryConfigMapByName(name string) *v1.ConfigMap {
 	if v, ok := c.appNamespace.Load(name); ok {
-		configMap, err := c.kubeOperator.CoreV1().ConfigMaps(v.(string)).Get(name, metaV1.GetOptions{})
+		configMap, err := c.kubeV1Client.ConfigMaps(v.(string)).Get(name, metaV1.GetOptions{})
 		if err == nil {
 			return configMap
 		}
 	}
 	for _, namespace := range embed.Env.RegisterServiceNamespace {
-		configMap, err := c.kubeOperator.CoreV1().ConfigMaps(namespace).Get(name, metaV1.GetOptions{})
+		configMap, err := c.kubeV1Client.ConfigMaps(namespace).Get(name, metaV1.GetOptions{})
 		if err == nil {
 			c.appNamespace.Store(name, namespace)
 			return configMap
@@ -26,8 +66,8 @@ func (c *Controller) QueryConfigMapByName(name string) *v1.ConfigMap {
 	return nil
 }
 
-func (c *Controller) CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error) {
-	configMapOperator := c.kubeOperator.CoreV1().ConfigMaps(dto.Namespace)
+func (c *ConfigMapOperatorImpl) CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error) {
+	configMapOperator := c.kubeV1Client.ConfigMaps(dto.Namespace)
 	createConfigMap, err := configMapOperator.Create(newV1ConfigMap(dto))
 	if err != nil {
 		return nil, err
@@ -37,8 +77,8 @@ func (c *Controller) CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, 
 	return createConfigMap, nil
 }
 
-func (c *Controller) UpdateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error) {
-	configMapOperator := c.kubeOperator.CoreV1().ConfigMaps(dto.Namespace)
+func (c *ConfigMapOperatorImpl) UpdateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error) {
+	configMapOperator := c.kubeV1Client.ConfigMaps(dto.Namespace)
 	updateConfigMap, err := configMapOperator.Update(newV1ConfigMap(dto))
 	if err != nil {
 		return nil, err
@@ -48,8 +88,8 @@ func (c *Controller) UpdateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, 
 	return updateConfigMap, nil
 }
 
-func (c *Controller) QueryConfigMap(name string, namespace string) *v1.ConfigMap {
-	configMapOperator := c.kubeOperator.CoreV1().ConfigMaps(namespace)
+func (c *ConfigMapOperatorImpl) QueryConfigMap(name string, namespace string) *v1.ConfigMap {
+	configMapOperator := c.kubeV1Client.ConfigMaps(namespace)
 	configMap, err := configMapOperator.Get(name, metaV1.GetOptions{})
 	if err == nil && configMap != nil {
 		return configMap

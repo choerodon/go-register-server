@@ -1,13 +1,11 @@
 package server
 
 import (
+	"github.com/choerodon/go-register-server/pkg/api/router"
 	"net/http"
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"github.com/choerodon/go-register-server/pkg/api/repository"
-	"github.com/choerodon/go-register-server/pkg/api/router"
 )
 
 type RegisterServer struct {
@@ -30,11 +28,9 @@ func (s *RegisterServer) PrepareRun() *PreparedRegisterServer {
 	return &PreparedRegisterServer{s}
 }
 
-func (s *PreparedRegisterServer) Run(appRepo *repository.ApplicationRepository, stopCh <-chan struct{}) error {
+func (s *PreparedRegisterServer) Run(stopCh <-chan struct{}) error {
 
-	if err := router.InitRouters(appRepo); err != nil {
-		return err
-	}
+	router.Register()
 
 	http.Handle("/metrics", promhttp.Handler())
 

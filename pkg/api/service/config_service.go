@@ -23,16 +23,18 @@ type ConfigService interface {
 }
 
 type ConfigServiceImpl struct {
-	Validate *validator.Validate
-	appRepo  *repository.ApplicationRepository
+	validate          *validator.Validate
+	appRepo           *repository.ApplicationRepository
+	configMapOperator k8s.ConfigMapOperator
 }
 
 func NewConfigServiceImpl(appRepo *repository.ApplicationRepository) *ConfigServiceImpl {
 	s := &ConfigServiceImpl{
-		Validate: validator.New(),
-		appRepo:  appRepo,
+		validate:          validator.New(),
+		appRepo:           appRepo,
+		configMapOperator: k8s.NewConfigMapOperator(),
 	}
-	_ = s.Validate.RegisterValidation("updatePolicy", entity.ValidateUpdatePolicy)
+	_ = s.validate.RegisterValidation("updatePolicy", entity.ValidateUpdatePolicy)
 	return s
 }
 
@@ -45,7 +47,7 @@ func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Re
 		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
 		return
 	}
-	err = es.Validate.Struct(dto)
+	err = es.validate.Struct(dto)
 	if err != nil {
 		glog.Warningf("Save config failed cause of invalid saveConfigDTO", err)
 		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
@@ -75,15 +77,15 @@ func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Re
 			UpdatePolicy: dto.UpdatePolicy,
 			Yaml:         rb,
 		}
-		createOrUpdateConfigMap(routeDTO, rm, response)
+		es.createOrUpdateConfigMap(routeDTO, rm, response)
 	}
-	createOrUpdateConfigMap(dto, source, response)
+	es.createOrUpdateConfigMap(dto, source, response)
 }
 
-func createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interface{}, response *restful.Response) {
-	queryConfigMap := k8s.RegisterK8sClient.QueryConfigMap(dto.Service, dto.Namespace)
+func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interface{}, response *restful.Response) {
+	queryConfigMap := es.configMapOperator.QueryConfigMap(dto.Service, dto.Namespace)
 	if queryConfigMap == nil {
-		_, err := k8s.RegisterK8sClient.CreateConfigMap(dto)
+		_, err := es.configMapOperator.CreateConfigMap(dto)
 		if err != nil {
 			glog.Warningf("Save config failed when create configMap", err)
 			_ = response.WriteErrorString(500, "create configMap failed")
@@ -110,13 +112,94 @@ func createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interf
 		}
 	}
 	if dto.UpdatePolicy != entity.UpdatePolicyNot {
-		_, err := k8s.RegisterK8sClient.UpdateConfigMap(dto)
+		_, err := es.configMapOperator.UpdateConfigMap(dto)
 		if err != nil {
 			glog.Warningf("Save config failed when update configMap", err)
 			_ = response.WriteErrorString(500, "update configMap failed")
 			return
 		}
 	}
+}
+
+func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Response) {
+	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
+	service := request.PathParameter("service")
+	if service == "" {
+		_ = response.WriteErrorString(400, "service is empty")
+		return
+	}
+	version := request.PathParameter("version")
+	if version == "" {
+		_ = response.WriteErrorString(400, "version is empty")
+		return
+	}
+	kvMap, configMapVersion, err := es.getConfigFromConfigMap(service, version)
+	if err != nil {
+		_ = response.WriteErrorString(404, "can't find correct configMap")
+		glog.Warningf("Get config from configMap failed, service: %s", service, err)
+		return
+	}
+	if isGateway(service) {
+		routeMap, _, err := es.getConfigFromConfigMap(entity.RouteConfigMap, version)
+		if err != nil {
+			_ = response.WriteErrorString(404, "can't find zuul-route configMap")
+			glog.Warningf("Get zuul-route from configMap failed", err)
+			return
+		}
+		for k, v := range routeMap {
+			kvMap[k] = v
+		}
+	}
+	es.appendConfigServerAddition(kvMap)
+	env := &entity.Environment{
+		Name:            service,
+		Version:         configMapVersion,
+		Profiles:        []string{version},
+		PropertySources: []entity.PropertySource{{Name: service + "-" + version + "-" + configMapVersion, Source: kvMap}},
+	}
+	printConfig, _ := json.MarshalIndent(kvMap, "", "  ")
+	glog.Infof("%s-%v pull config: %s", service, version, printConfig)
+	err = response.WriteAsJson(env)
+	if err != nil {
+		glog.Warningf("GetConfig write apps.Environment as json error,  msg : %s", env, err)
+	}
+}
+
+func (es *ConfigServiceImpl) appendConfigServerAddition(kvMap map[string]interface{}) {
+	for k, v := range entity.ConfigServerAdditions {
+		kvMap[k] = v
+	}
+}
+
+func (es *ConfigServiceImpl) getConfigFromConfigMap(service string, version string) (map[string]interface{}, string, error) {
+	source := make(map[string]interface{})
+	configMap := es.configMapOperator.QueryConfigMapByName(service)
+	if configMap == nil {
+		return nil, "", errors.New("can't find configMap")
+	}
+	application := "application"
+	if version != entity.DefaultProfile {
+		application += "-" + version
+	}
+	application += ".yml"
+	yamlString := configMap.Data[application]
+	if yamlString != "" {
+		err := yaml.Unmarshal([]byte(yamlString), &source)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	return utils.ConvertRecursiveMapToSingleMap(source), configMap.Annotations[entity.ChoerodonVersion], nil
+}
+
+func isGateway(service string) bool {
+	for _, v := range embed.Env.ConfigServer.GatewayNames {
+		if v == service {
+			return true
+		}
+	}
+	return false
 }
 
 func addProperty(oldYaml string, newMap map[string]interface{}) (string, error) {
@@ -167,85 +250,4 @@ func separateRoute(gateway map[string]interface{}) (string, string, map[string]i
 		return "", "", nil, err
 	}
 	return string(gb), string(rb), rm, nil
-}
-
-func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Response) {
-	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
-	service := request.PathParameter("service")
-	if service == "" {
-		_ = response.WriteErrorString(400, "service is empty")
-		return
-	}
-	version := request.PathParameter("version")
-	if version == "" {
-		_ = response.WriteErrorString(400, "version is empty")
-		return
-	}
-	kvMap, configMapVersion, err := getConfigFromConfigMap(service, version)
-	if err != nil {
-		_ = response.WriteErrorString(404, "can't find correct configMap")
-		glog.Warningf("Get config from configMap failed, service: %s", service, err)
-		return
-	}
-	if isGateway(service) {
-		routeMap, _, err := getConfigFromConfigMap(entity.RouteConfigMap, version)
-		if err != nil {
-			_ = response.WriteErrorString(404, "can't find zuul-route configMap")
-			glog.Warningf("Get zuul-route from configMap failed", err)
-			return
-		}
-		for k, v := range routeMap {
-			kvMap[k] = v
-		}
-	}
-	appendConfigServerAddition(kvMap)
-	env := &entity.Environment{
-		Name:            service,
-		Version:         configMapVersion,
-		Profiles:        []string{version},
-		PropertySources: []entity.PropertySource{{Name: service + "-" + version + "-" + configMapVersion, Source: kvMap}},
-	}
-	printConfig, _ := json.MarshalIndent(kvMap, "", "  ")
-	glog.Infof("%s-%v pull config: %s", service, version, printConfig)
-	err = response.WriteAsJson(env)
-	if err != nil {
-		glog.Warningf("GetConfig write apps.Environment as json error,  msg : %s", env, err)
-	}
-}
-
-func appendConfigServerAddition(kvMap map[string]interface{}) {
-	for k, v := range entity.ConfigServerAdditions {
-		kvMap[k] = v
-	}
-}
-
-func getConfigFromConfigMap(service string, version string) (map[string]interface{}, string, error) {
-	source := make(map[string]interface{})
-	configMap := k8s.RegisterK8sClient.QueryConfigMapByName(service)
-	if configMap == nil {
-		return nil, "", errors.New("can't find configMap")
-	}
-	application := "application"
-	if version != entity.DefaultProfile {
-		application += "-" + version
-	}
-	application += ".yml"
-	yamlString := configMap.Data[application]
-	if yamlString != "" {
-		err := yaml.Unmarshal([]byte(yamlString), &source)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	return utils.ConvertRecursiveMapToSingleMap(source), configMap.Annotations[entity.ChoerodonVersion], nil
-}
-
-func isGateway(service string) bool {
-	for _, v := range embed.Env.ConfigServer.GatewayNames {
-		if v == service {
-			return true
-		}
-	}
-	return false
 }

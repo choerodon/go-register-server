@@ -3,17 +3,14 @@ package k8s
 import (
 	"fmt"
 	"github.com/choerodon/go-register-server/pkg/embed"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
-	corev1 "k8s.io/api/core/v1"
+	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	coreListeners "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -23,56 +20,50 @@ import (
 	"strings"
 )
 
-var RegisterK8sClient *Controller
+type PodOperatorInterface interface {
+	StartMonitor(stopCh <-chan struct{})
+}
 
-type Controller struct {
-	kubeOperator kubernetes.Interface
+type PodOperator struct {
+	podsLister coreListeners.PodLister
 
-	podsLister corelisters.PodLister
 	podsSynced cache.InformerSynced
 
 	workQueue workqueue.RateLimitingInterface
 
 	appRepo *repository.ApplicationRepository
-
-	appNamespace *sync.Map
 }
 
-func NewController(
-	kubeclientset kubernetes.Interface,
-	kubeInformerFactory kubeinformers.SharedInformerFactory,
-	appRepo *repository.ApplicationRepository) *Controller {
+func NewPodAgent() *PodOperator {
 
-	podInformer := kubeInformerFactory.Core().V1().Pods()
+	podInformer := KubeInformerFactory.Core().V1().Pods()
 
-	controller := &Controller{
-		kubeOperator: kubeclientset,
-		podsLister:   podInformer.Lister(),
-		podsSynced:   podInformer.Informer().HasSynced,
-		workQueue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods"),
-		appRepo:      appRepo,
-		appNamespace: &sync.Map{},
+	podAgent := &PodOperator{
+		podsLister: podInformer.Lister(),
+		podsSynced: podInformer.Informer().HasSynced,
+		workQueue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods"),
+		appRepo:    AppRepo,
 	}
 
 	glog.Info("Setting up event handlers")
 
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueuePod,
+		AddFunc: podAgent.enqueuePod,
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			newPod := newObj.(*corev1.Pod)
-			oldPod := oldObj.(*corev1.Pod)
+			newPod := newObj.(*coreV1.Pod)
+			oldPod := oldObj.(*coreV1.Pod)
 			if newPod.ResourceVersion == oldPod.ResourceVersion {
 				return
 			}
-			controller.enqueuePod(newObj)
+			podAgent.enqueuePod(newObj)
 		},
-		DeleteFunc: controller.enqueuePod,
+		DeleteFunc: podAgent.enqueuePod,
 	})
 
-	return controller
+	return podAgent
 }
 
-func (c *Controller) enqueuePod(obj interface{}) {
+func (c *PodOperator) enqueuePod(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -82,7 +73,7 @@ func (c *Controller) enqueuePod(obj interface{}) {
 	c.workQueue.AddRateLimited(key)
 }
 
-func (c *Controller) Run(stopCh <-chan struct{}) {
+func (c *PodOperator) StartMonitor(stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.workQueue.ShutDown()
 
@@ -109,7 +100,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	glog.Info("Shutting down workers")
 }
 
-func (c *Controller) processNextWorkItem() bool {
+func (c *PodOperator) processNextWorkItem() bool {
 	key, shutdown := c.workQueue.Get()
 
 	if shutdown {
@@ -130,7 +121,7 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
-func (c *Controller) syncHandler(key string) (bool, error) {
+func (c *PodOperator) syncHandler(key string) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	matchNum := 0
 	for _, ns := range embed.Env.RegisterServiceNamespace {
