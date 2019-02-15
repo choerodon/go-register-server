@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	kubeinformers "k8s.io/client-go/informers"
+	kubeInformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -27,7 +27,7 @@ func NewServerCommand() *cobra.Command {
 			stopCh := signals.SetupSignalHandler()
 
 			if err := Run(s, stopCh); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+				_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -38,7 +38,7 @@ func NewServerCommand() *cobra.Command {
 }
 
 func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
-	appRepo := repository.NewApplicationRepository()
+	k8s.AppRepo = repository.NewApplicationRepository()
 
 	registerServer := server.CreateRegisterServer(s.RegisterServerOptions)
 
@@ -47,18 +47,17 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 		glog.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
 
-	kubeClient, err := kubernetes.NewForConfig(cfg)
+	k8s.KubeClient, err = kubernetes.NewForConfig(cfg)
 
 	if err != nil {
 		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
+	k8s.KubeInformerFactory = kubeInformers.NewSharedInformerFactory(k8s.KubeClient, time.Second*30)
 
-	k8s.RegisterK8sClient = k8s.NewController(kubeClient, kubeInformerFactory, appRepo)
+	go k8s.KubeInformerFactory.Start(stopCh)
+	go k8s.NewPodAgent().StartMonitor(stopCh)
+	go k8s.NewConfigMapOperator().StartMonitor(stopCh)
 
-	go kubeInformerFactory.Start(stopCh)
-	go k8s.RegisterK8sClient.Run(stopCh)
-
-	return registerServer.PrepareRun().Run(appRepo, stopCh)
+	return registerServer.PrepareRun().Run(stopCh)
 }

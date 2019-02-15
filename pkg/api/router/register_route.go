@@ -1,16 +1,17 @@
 package router
 
 import (
-	"github.com/choerodon/go-register-server/pkg/api/repository"
 	"github.com/choerodon/go-register-server/pkg/api/service"
 	"github.com/choerodon/go-register-server/pkg/embed"
+	"github.com/choerodon/go-register-server/pkg/k8s"
 	"github.com/emicklei/go-restful"
 	"github.com/golang/glog"
 	"net/http"
 	"path"
 )
 
-func Register(appRepo *repository.ApplicationRepository) {
+func Register() {
+	appRepo := k8s.AppRepo
 
 	rs := service.NewEurekaServerServiceImpl(appRepo)
 

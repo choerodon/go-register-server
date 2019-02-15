@@ -105,3 +105,15 @@ func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []
 	})
 	return instances
 }
+
+func (appRepo *ApplicationRepository) GetInstancesByService(service string) []*entity.Instance {
+	instances := make([]*entity.Instance, 0)
+	appRepo.instanceStore.Range(func(instanceId, value interface{}) bool {
+		instance := value.(*entity.Instance)
+		if instance.App == service && instance.Status == "UP" {
+			instances = append(instances, instance)
+		}
+		return true
+	})
+	return instances
+}
