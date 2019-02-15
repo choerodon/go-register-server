@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"k8s.io/api/core/v1"
 	"reflect"
@@ -119,4 +121,18 @@ func recursive(singleMap map[string]interface{}, prefix string, recursiveMap map
 			singleMap[newKey] = v
 		}
 	}
+}
+
+func Sha256(data string) string {
+	h := sha256.New()
+	h.Write([]byte(data))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func Sha256Map(data map[string]string) string {
+	str := ""
+	for k, v := range data {
+		str = str + k + v
+	}
+	return Sha256(str)
 }

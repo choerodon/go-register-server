@@ -57,7 +57,7 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	go k8s.KubeInformerFactory.Start(stopCh)
 	go k8s.NewPodAgent().StartMonitor(stopCh)
-	go k8s.NewConfigMapOperator().StartMonitor()
+	go k8s.NewConfigMapOperator().StartMonitor(stopCh)
 
 	return registerServer.PrepareRun().Run(stopCh)
 }
