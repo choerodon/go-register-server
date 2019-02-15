@@ -103,7 +103,7 @@ func (c *ConfigMapOperatorImpl) StartMonitor(stopCh <-chan struct{}) {
 	go func() {
 		for {
 			if d, ok := <-c.notify; ok {
-				glog.Info("ConfigMap %s Changes detected", d)
+				glog.Infof("ConfigMap %s Changes detected", d)
 				instances := c.appRepo.GetInstancesByService(d)
 				go c.notifyRefresh(instances)
 			}

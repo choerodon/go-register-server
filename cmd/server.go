@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/choerodon/go-register-server/pkg/embed"
 	"os"
 	"time"
 
@@ -57,7 +58,10 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	go k8s.KubeInformerFactory.Start(stopCh)
 	go k8s.NewPodAgent().StartMonitor(stopCh)
-	go k8s.NewConfigMapOperator().StartMonitor(stopCh)
+
+	if embed.Env.ConfigServer.Enabled {
+		go k8s.NewConfigMapOperator().StartMonitor(stopCh)
+	}
 
 	return registerServer.PrepareRun().Run(stopCh)
 }
