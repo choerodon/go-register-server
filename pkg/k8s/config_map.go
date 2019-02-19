@@ -104,7 +104,14 @@ func (c *ConfigMapOperatorImpl) StartMonitor(stopCh <-chan struct{}) {
 		for {
 			if d, ok := <-c.notify; ok {
 				glog.Infof("ConfigMap %s Changes detected", d)
-				instances := c.appRepo.GetInstancesByService(d)
+				instances := make([]*entity.Instance, 0)
+				if entity.RouteConfigMap == d {
+					for _, gateway := range embed.Env.ConfigServer.GatewayNames {
+						instances = append(instances, c.appRepo.GetInstancesByService(gateway)...)
+					}
+				} else {
+					instances = c.appRepo.GetInstancesByService(d)
+				}
 				go c.notifyRefresh(instances)
 			}
 		}
@@ -133,8 +140,8 @@ func (c *ConfigMapOperatorImpl) notifyRefresh(instance []*entity.Instance) {
 			"CJjcmVkZW50aWFsc05vbkV4cGlyZWQiOnRydWUsImVuYWJsZWQiOnRydWUsInVzZXJJZCI6MCwiZW1h"+
 			"aWwiOm51bGwsInRpbWVab25lIjoiQ1RUIiwibGFuZ3VhZ2UiOiJ6aF9DTiIsIm9yZ2FuaXphdGlvbklkI"+
 			"joxLCJhZGRpdGlvbkluZm8iOm51bGwsImFkbWluIjpmYWxzZX0.Bw96KnS4ZRyEY-77zIetuObbqcu2LR7J03MqwPS6pLI")
-		res, error := http.DefaultClient.Do(req)
-		if error == nil && 200 <= res.StatusCode && res.StatusCode < 300 {
+		res, err := http.DefaultClient.Do(req)
+		if err == nil && 200 <= res.StatusCode && res.StatusCode < 300 {
 			glog.Infof("Notify instance %s refresh config success", v.InstanceId)
 		} else {
 			glog.Warningf("Notify instance %s refresh config failed", v.InstanceId)

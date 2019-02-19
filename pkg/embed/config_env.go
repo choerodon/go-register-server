@@ -31,4 +31,5 @@ type Config struct {
 type ConfigServer struct {
 	Enabled      bool     `profileDefault:"true"`
 	GatewayNames []string `profile:"gateway.names" profileDefault:"[\"api-gateway\", \"gateway-helper\"]"`
+	Log          bool     `profileDefault:"false"`
 }

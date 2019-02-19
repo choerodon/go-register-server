@@ -157,8 +157,12 @@ func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Re
 		Profiles:        []string{version},
 		PropertySources: []entity.PropertySource{{Name: service + "-" + version + "-" + configMapVersion, Source: kvMap}},
 	}
-	printConfig, _ := json.MarshalIndent(kvMap, "", "  ")
-	glog.Infof("%s-%v pull config: %s", service, version, printConfig)
+	if embed.Env.ConfigServer.Log {
+		printConfig, _ := json.MarshalIndent(kvMap, "", "  ")
+		glog.Infof("%s-%v pulled config: %s", service, version, printConfig)
+	} else {
+		glog.Infof("%s-%v pulled config", service, version)
+	}
 	err = response.WriteAsJson(env)
 	if err != nil {
 		glog.Warningf("GetConfig write apps.Environment as json error,  msg : %s", env, err)

@@ -7,6 +7,7 @@ register:
 config:
   server:
     enabled: true
+    log: false
     gateway:
       names:
         - api-gateway
