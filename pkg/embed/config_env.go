@@ -33,3 +33,12 @@ type ConfigServer struct {
 	GatewayNames []string `profile:"gateway.names" profileDefault:"[\"api-gateway\", \"gateway-helper\"]"`
 	Log          bool     `profileDefault:"false"`
 }
+
+func (config Config) IsRegisterServiceNamespace(ns string) bool {
+	for _, n := range config.RegisterServiceNamespace {
+		if n == ns {
+			return true
+		}
+	}
+	return false
+}

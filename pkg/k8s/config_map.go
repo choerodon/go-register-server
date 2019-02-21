@@ -1,20 +1,26 @@
 package k8s
 
 import (
+	"fmt"
 	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"github.com/choerodon/go-register-server/pkg/api/repository"
 	"github.com/choerodon/go-register-server/pkg/embed"
 	"github.com/choerodon/go-register-server/pkg/utils"
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	configMapV1 "k8s.io/client-go/informers/core/v1"
+	"k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreV1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	listerV1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var ConfigMapClient *ConfigMapOperatorImpl
@@ -28,78 +34,60 @@ type ConfigMapOperator interface {
 }
 
 type ConfigMapOperatorImpl struct {
-	appNamespace *sync.Map
-
-	kubeV1Client coreV1.CoreV1Interface
-
-	configMapInformer configMapV1.ConfigMapInformer
-
-	configMapCache *sync.Map
-
-	notify chan string
-
-	appRepo *repository.ApplicationRepository
+	queue workqueue.RateLimitingInterface
+	// workerLoopPeriod is the time between worker runs. The workers process the queue of configMap and pod changes.
+	workerLoopPeriod time.Duration
+	lister           listerV1.ConfigMapLister
+	configMapsSynced cache.InformerSynced
+	configMapCache   *sync.Map
+	kubeV1Client     coreV1.CoreV1Interface
+	notify           chan string
+	appRepo          *repository.ApplicationRepository
+	appNamespace     *sync.Map
 }
 
 func NewConfigMapOperator() ConfigMapOperator {
-	configMapInformer := KubeInformerFactory.Core().V1().ConfigMaps()
-	if ConfigMapClient == nil {
-		ConfigMapClient = &ConfigMapOperatorImpl{
-			configMapInformer: configMapInformer,
-			appNamespace:      &sync.Map{},
-			kubeV1Client:      KubeClient.CoreV1(),
-			configMapCache:    &sync.Map{},
-			notify:            make(chan string, 50),
-			appRepo:           AppRepo,
-		}
-		ConfigMapClient.configMapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				mobj := obj.(*v1.ConfigMap)
-				if isMonitorNamespace(mobj.Namespace) && mobj.Annotations[entity.ChoerodonFeature] == entity.ChoerodonFeatureConfig {
-					_, ok := ConfigMapClient.configMapCache.Load(mobj.Name)
-					if !ok {
-						ConfigMapClient.configMapCache.Store(mobj.Name, utils.Sha256Map(mobj.Data))
-					}
-				}
-			},
-			UpdateFunc: func(old interface{}, new interface{}) {
-				mnewobj := new.(*v1.ConfigMap)
-				if isMonitorNamespace(mnewobj.Namespace) && mnewobj.Annotations[entity.ChoerodonFeature] == entity.ChoerodonFeatureConfig {
-					sha, ok := ConfigMapClient.configMapCache.Load(mnewobj.Name)
-					if ok {
-						nsha := utils.Sha256Map(mnewobj.Data)
-						if sha != nsha {
-							ConfigMapClient.configMapCache.Store(mnewobj.Name, utils.Sha256Map(mnewobj.Data))
-							ConfigMapClient.notify <- mnewobj.Name
-						}
-					} else {
-						ConfigMapClient.configMapCache.Store(mnewobj.Name, utils.Sha256Map(mnewobj.Data))
-					}
-
-				}
-			},
-			DeleteFunc: func(obj interface{}) {
-				mobj := obj.(*v1.ConfigMap)
-				if isMonitorNamespace(mobj.Namespace) && mobj.Annotations[entity.ChoerodonFeature] == entity.ChoerodonFeatureConfig {
-					ConfigMapClient.configMapCache.Delete(mobj.Name)
-				}
-			},
-		})
+	if ConfigMapClient != nil {
+		return ConfigMapClient
 	}
+	configMapInformer := KubeInformerFactory.Core().V1().ConfigMaps()
+	ConfigMapClient := &ConfigMapOperatorImpl{
+		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "cofigmap"),
+		workerLoopPeriod: time.Second,
+		lister:           configMapInformer.Lister(),
+		notify:           make(chan string, 50),
+		appRepo:          AppRepo,
+		appNamespace:     &sync.Map{},
+		kubeV1Client:     KubeClient.CoreV1(),
+		configMapCache:   &sync.Map{},
+	}
+	configMapInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: ConfigMapClient.enqueueConfigMap,
+		UpdateFunc: func(old, new interface{}) {
+			newConfigMap := new.(*v1.ConfigMap)
+			oldConfigMap := old.(*v1.ConfigMap)
+			if newConfigMap.ResourceVersion == oldConfigMap.ResourceVersion {
+				return
+			}
+			ConfigMapClient.enqueueConfigMap(new)
+		},
+		DeleteFunc: ConfigMapClient.enqueueConfigMap,
+	})
+	ConfigMapClient.configMapsSynced = configMapInformer.Informer().HasSynced
 	return ConfigMapClient
 }
 
-func isMonitorNamespace(namespace string) bool {
-	for _, ns := range embed.Env.RegisterServiceNamespace {
-		if strings.Compare(ns, namespace) == 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *ConfigMapOperatorImpl) StartMonitor(stopCh <-chan struct{}) {
-	glog.Info("Starting configMap monitor")
+	defer runtime.HandleCrash()
+	defer c.queue.ShutDown()
+	if ok := cache.WaitForCacheSync(stopCh, c.configMapsSynced); !ok {
+		glog.Fatal("failed to wait for caches to sync")
+	}
+	glog.Info("Starting k8s configMap monitor")
+	for i := 0; i < 3; i++ {
+		go wait.Until(c.runWorker, time.Second, stopCh)
+	}
+	glog.Info("Started k8s configMap monitor")
 	go func() {
 		for {
 			if d, ok := <-c.notify; ok {
@@ -116,10 +104,91 @@ func (c *ConfigMapOperatorImpl) StartMonitor(stopCh <-chan struct{}) {
 			}
 		}
 	}()
-	c.configMapInformer.Informer().Run(stopCh)
-	glog.Info("Started configMap monitor")
 	<-stopCh
-	glog.Info("Shutting down configMap monitor")
+	glog.V(1).Info("Shutting down k8s configMap monitor")
+}
+func (c *ConfigMapOperatorImpl) enqueueConfigMap(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err != nil {
+		runtime.HandleError(err)
+		return
+	}
+	c.queue.AddRateLimited(key)
+}
+
+func (c *ConfigMapOperatorImpl) runWorker() {
+	for c.processNextWorkItem() {
+	}
+}
+
+func (c *ConfigMapOperatorImpl) processNextWorkItem() bool {
+	key, shutdown := c.queue.Get()
+
+	if shutdown {
+		return false
+	}
+	defer c.queue.Done(key)
+
+	forget, err := c.syncHandler(key.(string))
+	if err == nil {
+		if forget {
+			c.queue.Forget(key)
+		}
+		return true
+	}
+
+	runtime.HandleError(fmt.Errorf("error syncing '%s': %s", key, err.Error()))
+	c.queue.AddRateLimited(key)
+
+	return true
+}
+
+func (c *ConfigMapOperatorImpl) syncHandler(key string) (bool, error) {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return true, nil
+	}
+
+	if !embed.Env.IsRegisterServiceNamespace(namespace) {
+		return true, nil
+	}
+
+	configMap, err := c.lister.ConfigMaps(namespace).Get(name)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			c.configMapCache.Delete(name)
+			glog.Warningf("configMap '%s' in work queue no longer exists", key)
+			return true, nil
+		}
+		return false, err
+	}
+
+	if configMap.Annotations[entity.ChoerodonFeature] == entity.ChoerodonFeatureConfig {
+		sha, ok := c.configMapCache.Load(configMap.Name)
+		newSha := utils.Sha256Map(configMap.Data)
+		if ok {
+			if sha != newSha {
+				c.configMapCache.Store(name, newSha)
+				c.notify <- name
+			}
+		} else {
+			glog.Infof("configMap '%s' is being monitored", key)
+			c.configMapCache.Store(name, newSha)
+		}
+	}
+
+	return true, nil
+}
+
+func isMonitorNamespace(namespace string) bool {
+	for _, ns := range embed.Env.RegisterServiceNamespace {
+		if strings.Compare(ns, namespace) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ConfigMapOperatorImpl) notifyRefresh(instance []*entity.Instance) {
@@ -141,10 +210,12 @@ func (c *ConfigMapOperatorImpl) notifyRefresh(instance []*entity.Instance) {
 			"aWwiOm51bGwsInRpbWVab25lIjoiQ1RUIiwibGFuZ3VhZ2UiOiJ6aF9DTiIsIm9yZ2FuaXphdGlvbklkI"+
 			"joxLCJhZGRpdGlvbkluZm8iOm51bGwsImFkbWluIjpmYWxzZX0.Bw96KnS4ZRyEY-77zIetuObbqcu2LR7J03MqwPS6pLI")
 		res, err := http.DefaultClient.Do(req)
-		if err == nil && 200 <= res.StatusCode && res.StatusCode < 300 {
+		if err != nil {
+			glog.Warningf("Notify instance %s refresh config failed, error: %s", v.InstanceId, err.Error())
+		} else if 200 <= res.StatusCode && res.StatusCode < 300 {
 			glog.Infof("Notify instance %s refresh config success", v.InstanceId)
 		} else {
-			glog.Warningf("Notify instance %s refresh config failed", v.InstanceId)
+			glog.Warningf("Notify instance %s refresh config failed, statusCode: %d", v.InstanceId, res.StatusCode)
 		}
 	}
 }
