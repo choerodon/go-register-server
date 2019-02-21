@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"reflect"
+	"strings"
 )
 
 type ConfigService interface {
@@ -145,6 +146,12 @@ func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Re
 			_ = response.WriteErrorString(404, "can't find zuul-route configMap")
 			glog.Warningf("Get zuul-route from configMap failed", err)
 			return
+		}
+		// 如果是api-gateway或者gateway-helper，则删除他们配置里的路由配置，添加'zuul-route'configMap里的路由配置
+		for k, _ := range kvMap {
+			if strings.HasPrefix(k, "zuul.routes.") {
+				delete(kvMap, k)
+			}
 		}
 		for k, v := range routeMap {
 			kvMap[k] = v
