@@ -56,12 +56,14 @@ func Run(s *options.ServerRunOptions, stopCh <-chan struct{}) error {
 
 	k8s.KubeInformerFactory = kubeInformers.NewSharedInformerFactory(k8s.KubeClient, time.Second*30)
 
-	go k8s.KubeInformerFactory.Start(stopCh)
-	go k8s.NewPodAgent().StartMonitor(stopCh)
-
 	if embed.Env.ConfigServer.Enabled {
 		go k8s.NewConfigMapOperator().StartMonitor(stopCh)
 	}
+
+	go k8s.NewPodAgent().StartMonitor(stopCh)
+
+
+	k8s.KubeInformerFactory.Start(stopCh)
 
 	return registerServer.PrepareRun().Run(stopCh)
 }

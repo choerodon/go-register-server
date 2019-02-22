@@ -77,16 +77,13 @@ func (c *PodOperator) StartMonitor(stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 	defer c.workQueue.ShutDown()
 
-	// Start the informer factories to begin populating the informer caches
-	glog.Info("Starting Pod k8s")
-
 	// Wait for the caches to be synced before starting workers
 	glog.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.podsSynced); !ok {
 		glog.Error("failed to wait for caches to sync")
 	}
 
-	glog.Info("Starting workers")
+	glog.Info("Starting k8s pod monitor")
 	// Launch two workers to process Foo resources
 	for i := 0; i < 2; i++ {
 		go wait.Until(func() {
@@ -95,9 +92,9 @@ func (c *PodOperator) StartMonitor(stopCh <-chan struct{}) {
 		}, time.Second, stopCh)
 	}
 
-	glog.Info("Started workers")
+	glog.Info("Started k8s pod monitor")
 	<-stopCh
-	glog.Info("Shutting down workers")
+	glog.Info("Shutting down k8s pod monitor")
 }
 
 func (c *PodOperator) processNextWorkItem() bool {
