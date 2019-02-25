@@ -34,7 +34,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ .Release.Name }}
+  name: {{ .Chart.Name }}
 subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}
