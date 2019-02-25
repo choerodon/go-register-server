@@ -6,7 +6,7 @@ metadata:
   {{ include "service.labels.standard" . | indent 4 }}
 rules:
   - apiGroups:
-      - ""
+      - "*"
     resources:
       - pods
     verbs:
@@ -14,7 +14,7 @@ rules:
       - list
       - watch
   - apiGroups:
-      - ""
+      - "*"
     resources:
       - configMaps
     verbs:
