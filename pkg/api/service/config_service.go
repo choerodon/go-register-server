@@ -16,6 +16,7 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -255,9 +256,7 @@ func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Re
 				delete(kvMap, k)
 			}
 		}
-		for k, v := range routeMap {
-			kvMap[k] = v
-		}
+		processZuulRoot(kvMap, routeMap, "")
 	}
 	es.appendConfigServerAddition(kvMap)
 	env := &entity.Environment{
@@ -275,6 +274,29 @@ func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Re
 	err = response.WriteAsJson(env)
 	if err != nil {
 		glog.Warningf("GetConfig write apps.Environment as json error,  msg : %s", env, err)
+	}
+}
+
+func processZuulRoot(kvMap map[string]interface{}, routeMap map[string]interface{}, prefix string) {
+	for k, v := range routeMap {
+		key := prefix + k
+		value := reflect.ValueOf(v)
+		if value.Kind() == reflect.Slice {
+			for i := 0; i < value.Len(); i++ {
+				newKey := key + "["
+				newKey += strconv.Itoa(i)
+				newKey += "]"
+				element := value.Index(i).Interface()
+				if reflect.TypeOf(element).Kind() == reflect.Map {
+					newKey += "."
+					processZuulRoot(kvMap, element.(map[string]interface{}), newKey)
+				} else if reflect.TypeOf(element).Kind() == reflect.String {
+					kvMap[newKey] = element
+				}
+			}
+		} else if value.Kind() == reflect.String {
+			kvMap[key] = v
+		}
 	}
 }
 
