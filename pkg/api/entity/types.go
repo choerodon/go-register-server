@@ -125,6 +125,31 @@ type SaveConfigDTO struct {
 	UpdatePolicy string `json:"updatePolicy" validate:"updatePolicy"`
 }
 
+type ZuulRootDTO struct {
+	Name                   string `json:"name" validate:"required"`
+	Path                   string `json:"path" validate:"required"`
+	ServiceId              string `json:"serviceId" validate:"required"`
+	Url                    string `json:"url"`
+	StripPrefix            string `json:"stripPrefix"`
+	Retryable              bool   `json:"retryable"`
+	SensitiveHeaders       bool   `json:"sensitiveHeaders"`
+	CustomSensitiveHeaders bool   `json:"customSensitiveHeaders"`
+	HelperService          string `json:"helperService"`
+	BuiltIn                bool   `json:"builtIn"`
+}
+
+const (
+	Path                   = "path"
+	ServiceId              = "serviceId"
+	Url                    = "url"
+	StripPrefix            = "stripPrefix"
+	Retryable              = "retryable"
+	SensitiveHeaders       = "sensitiveHeaders"
+	CustomSensitiveHeaders = "customSensitiveHeaders"
+	HelperService          = "helperService"
+	BuiltIn                = "builtIn"
+)
+
 const (
 	ChoerodonService          = "choerodon.io/service"
 	ChoerodonVersion          = "choerodon.io/version"
@@ -136,6 +161,8 @@ const (
 	RegisterServerName        = "go-register-server"
 	RouteConfigMap            = "zuul-route"
 	ApiGatewayServiceName     = "api-gateway"
+	ZuulNode                  = "zuul"
+	RoutesNode                = "routes"
 )
 
 const (
@@ -151,7 +178,7 @@ var ConfigServerAdditions = map[string]interface{}{
 	"spring.cloud.config.overrideSystemProperties": false,
 	"spring.sleuth.integration.enabled":            false,
 	"spring.sleuth.scheduled.enabled":              false,
-	"sampler.percentage":                           1,}
+	"sampler.percentage":                           1}
 
 func ValidateUpdatePolicy(fl validator.FieldLevel) bool {
 	v := fl.Field().String()
