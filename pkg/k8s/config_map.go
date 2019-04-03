@@ -27,6 +27,7 @@ var ConfigMapClient *ConfigMapOperatorImpl
 
 type ConfigMapOperator interface {
 	QueryConfigMapByName(name string) *v1.ConfigMap
+	QueryConfigMapAndNamespaceByName(name string) (*v1.ConfigMap, string)
 	CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error)
 	UpdateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error)
 	QueryConfigMap(name string, namespace string) *v1.ConfigMap
@@ -237,6 +238,23 @@ func (c *ConfigMapOperatorImpl) QueryConfigMapByName(name string) *v1.ConfigMap 
 	return nil
 }
 
+func (c *ConfigMapOperatorImpl) QueryConfigMapAndNamespaceByName(name string) (*v1.ConfigMap, string) {
+	if v, ok := c.appNamespace.Load(name); ok {
+		configMap, err := c.kubeV1Client.ConfigMaps(v.(string)).Get(name, metaV1.GetOptions{})
+		if err == nil {
+			return configMap, fmt.Sprintf("%v", v)
+		}
+	}
+	for _, namespace := range embed.Env.RegisterServiceNamespace {
+		configMap, err := c.kubeV1Client.ConfigMaps(namespace).Get(name, metaV1.GetOptions{})
+		if err == nil {
+			c.appNamespace.Store(name, namespace)
+			return configMap, namespace
+		}
+	}
+	return nil, ""
+}
+
 func (c *ConfigMapOperatorImpl) CreateConfigMap(dto *entity.SaveConfigDTO) (*v1.ConfigMap, error) {
 	configMapOperator := c.kubeV1Client.ConfigMaps(dto.Namespace)
 	createConfigMap, err := configMapOperator.Create(newV1ConfigMap(dto))
@@ -273,8 +291,7 @@ func newV1ConfigMap(dto *entity.SaveConfigDTO) *v1.ConfigMap {
 		ObjectMeta: metaV1.ObjectMeta{
 			Namespace: dto.Namespace,
 			Name:      dto.Service,
-			Annotations: map[string]string{entity.ChoerodonService: dto.Service, entity.ChoerodonFeature:
-			entity.ChoerodonFeatureConfig, entity.ChoerodonVersion: dto.Version},
+			Annotations: map[string]string{entity.ChoerodonService: dto.Service, entity.ChoerodonFeature: entity.ChoerodonFeatureConfig, entity.ChoerodonVersion: dto.Version},
 		},
 		Data: map[string]string{utils.ConfigMapProfileKey(dto.Profile): dto.Yaml},
 	}

@@ -55,7 +55,9 @@ func Register() {
 		// 创建配置或者更新配置
 		ws.Route(ws.POST("configs").To(cs.Save).
 			Doc("Create a config").Produces("application/json"))
-
+		//向zuul-root里添加或更新路由
+		ws.Route(ws.POST("zuul").To(cs.AddOrUpdate).
+			Doc("Add route to config map which name is zuul-root").Produces("application/json"))
 	}
 
 	restful.Add(ws)

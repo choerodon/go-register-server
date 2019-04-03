@@ -14,6 +14,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/go-playground/validator.v9"
+	"net/http"
 	"reflect"
 	"strings"
 )
@@ -21,6 +22,7 @@ import (
 type ConfigService interface {
 	Save(request *restful.Request, response *restful.Response)
 	Poll(request *restful.Request, response *restful.Response)
+	AddOrUpdate(request *restful.Request, response *restful.Response)
 }
 
 type ConfigServiceImpl struct {
@@ -39,26 +41,126 @@ func NewConfigServiceImpl(appRepo *repository.ApplicationRepository) *ConfigServ
 	return s
 }
 
+func (es *ConfigServiceImpl) AddOrUpdate(request *restful.Request, response *restful.Response) {
+	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
+	dto := new(entity.ZuulRootDTO)
+	err := request.ReadEntity(&dto)
+	if err != nil {
+		glog.Warningf("Add or update zuul-root failed when readEntity", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "invalid ZuulRootDTO")
+		return
+	}
+	err = es.validate.Struct(dto)
+	if err != nil {
+		glog.Warningf("Add or update zuul-root failed because of invalid ZuulRootDTO", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "invalid ZuulRootDTO")
+		return
+	}
+	configMap, namespace := es.configMapOperator.QueryConfigMapAndNamespaceByName(entity.RouteConfigMap)
+	if configMap == nil {
+		glog.Warningf("Add or update zuul-root failed because of can not find config map : zuul-root", err)
+		_ = response.WriteErrorString(http.StatusNotFound, "not found zuul-root")
+		return
+	}
+	version := configMap.ObjectMeta.Annotations[entity.ChoerodonVersion]
+
+	profileKey := utils.ConfigMapProfileKey(entity.DefaultProfile)
+	oldYaml := configMap.Data[profileKey]
+	source := make(map[string]interface{})
+	if oldYaml == "" {
+		glog.Warningf("zuul-root yaml is empty", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "empty zuul-root")
+		return
+	}
+	err = yaml.Unmarshal([]byte(oldYaml), &source)
+	if err != nil {
+		glog.Warningf("yaml convert to map error", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "error to convert yaml to map")
+		return
+	}
+
+	zuulMap := source[entity.ZuulNode].(map[string]interface{})
+	routesMap := zuulMap[entity.RoutesNode].(map[string]interface{})
+
+	//已存在，更新
+	if val, ok := routesMap[dto.Name]; ok {
+		route := val.(map[string]interface{})
+		es.dto2map(route, dto)
+		zuulMap = map[string]interface{}{"zuul": zuulMap}
+		zuulYaml, err := yaml.Marshal(zuulMap)
+		if err != nil {
+			glog.Warningf("map to yaml error", err)
+			_ = response.WriteErrorString(http.StatusBadRequest, "error to convert map to yaml")
+			return
+		}
+		es.saveOrUpdate(version, namespace, zuulYaml, response)
+		return
+	}
+	//不存在，新建
+	route := make(map[string]interface{})
+	es.dto2map(route, dto)
+	routesMap[dto.Name] = route
+
+	zuulMap = map[string]interface{}{"zuul": zuulMap}
+	zuulYaml, err := yaml.Marshal(zuulMap)
+	if err != nil {
+		glog.Warningf("map to yaml error", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "error to convert map to yaml")
+		return
+	}
+	es.saveOrUpdate(version, namespace, zuulYaml, response)
+}
+
+func (es *ConfigServiceImpl) saveOrUpdate(version string, namespace string, zuulYaml []byte, response *restful.Response) {
+	saveConfigDTO := &entity.SaveConfigDTO{
+		Service:      entity.RouteConfigMap,
+		Version:      version,
+		Profile:      entity.DefaultProfile,
+		Namespace:    namespace,
+		UpdatePolicy: entity.UpdatePolicyOverride,
+		Yaml:         string(zuulYaml),
+	}
+	_, err := es.configMapOperator.UpdateConfigMap(saveConfigDTO)
+	if err != nil {
+		glog.Warningf("Save config failed when update configMap", err)
+		_ = response.WriteErrorString(http.StatusInternalServerError, "update configMap failed")
+	}
+}
+
+func (es *ConfigServiceImpl) dto2map(route map[string]interface{}, dto *entity.ZuulRootDTO) {
+	route[entity.Path] = dto.Path
+	route[entity.ServiceId] = dto.ServiceId
+	if dto.Url != "" {
+		route[entity.Url] = dto.Url
+	}
+	if dto.StripPrefix != "" {
+		route[entity.StripPrefix] = dto.StripPrefix
+	}
+	if dto.HelperService != "" {
+		route[entity.HelperService] = dto.HelperService
+	}
+}
+
 func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Response) {
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	dto := new(entity.SaveConfigDTO)
 	err := request.ReadEntity(&dto)
 	if err != nil {
 		glog.Warningf("Save config failed when readEntity", err)
-		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
+		_ = response.WriteErrorString(http.StatusBadRequest, "invalid saveConfigDTO")
 		return
 	}
 	err = es.validate.Struct(dto)
 	if err != nil {
 		glog.Warningf("Save config failed cause of invalid saveConfigDTO", err)
-		_ = response.WriteErrorString(400, "invalid saveConfigDTO")
+		_ = response.WriteErrorString(http.StatusBadRequest, "invalid saveConfigDTO")
 		return
 	}
 	source := make(map[string]interface{})
 	err = yaml.Unmarshal([]byte(dto.Yaml), &source)
 	if err != nil {
 		glog.Warningf("Save config failed cause of invalid yaml", err)
-		_ = response.WriteErrorString(400, "invalid yaml")
+		_ = response.WriteErrorString(http.StatusBadRequest, "invalid yaml")
 		return
 	}
 
@@ -66,7 +168,7 @@ func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Re
 		gb, rb, rm, err := separateRoute(source)
 		if err != nil {
 			glog.Warningf("Save config failed when separateRoute", err)
-			_ = response.WriteErrorString(500, "separateRoute error")
+			_ = response.WriteErrorString(http.StatusInternalServerError, "separateRoute error")
 			return
 		}
 		dto.Yaml = gb
@@ -89,13 +191,13 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 		_, err := es.configMapOperator.CreateConfigMap(dto)
 		if err != nil {
 			glog.Warningf("Save config failed when create configMap", err)
-			_ = response.WriteErrorString(500, "create configMap failed")
+			_ = response.WriteErrorString(http.StatusInternalServerError, "create configMap failed")
 			return
 		}
 	}
 	if queryConfigMap != nil && dto.UpdatePolicy == entity.UpdatePolicyNot {
 		glog.Infof("configMap %s is already exist", dto.Service)
-		_ = response.WriteErrorString(304, "configMap is already exist")
+		_ = response.WriteErrorString(http.StatusNotModified, "configMap is already exist")
 		return
 	}
 
@@ -106,7 +208,7 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 			newYaml, err := addProperty(oldYaml, source)
 			if err != nil {
 				glog.Warningf("Save config failed when merge yaml", err)
-				_ = response.WriteErrorString(500, "merge yaml failed")
+				_ = response.WriteErrorString(http.StatusInternalServerError, "merge yaml failed")
 				return
 			}
 			dto.Yaml = newYaml
@@ -116,7 +218,7 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 		_, err := es.configMapOperator.UpdateConfigMap(dto)
 		if err != nil {
 			glog.Warningf("Save config failed when update configMap", err)
-			_ = response.WriteErrorString(500, "update configMap failed")
+			_ = response.WriteErrorString(http.StatusInternalServerError, "update configMap failed")
 			return
 		}
 	}
@@ -126,24 +228,24 @@ func (es *ConfigServiceImpl) Poll(request *restful.Request, response *restful.Re
 	metrics.RequestCount.With(prometheus.Labels{"path": request.Request.RequestURI}).Inc()
 	service := request.PathParameter("service")
 	if service == "" {
-		_ = response.WriteErrorString(400, "service is empty")
+		_ = response.WriteErrorString(http.StatusBadRequest, "service is empty")
 		return
 	}
 	version := request.PathParameter("version")
 	if version == "" {
-		_ = response.WriteErrorString(400, "version is empty")
+		_ = response.WriteErrorString(http.StatusBadRequest, "version is empty")
 		return
 	}
 	kvMap, configMapVersion, err := es.getConfigFromConfigMap(service, version)
 	if err != nil {
-		_ = response.WriteErrorString(404, "can't find correct configMap")
+		_ = response.WriteErrorString(http.StatusNotFound, "can't find correct configMap")
 		glog.Warningf("Get config from configMap failed, service: %s", service, err)
 		return
 	}
 	if isGateway(service) {
 		routeMap, _, err := es.getConfigFromConfigMap(entity.RouteConfigMap, version)
 		if err != nil {
-			_ = response.WriteErrorString(404, "can't find zuul-route configMap")
+			_ = response.WriteErrorString(http.StatusNotFound, "can't find zuul-route configMap")
 			glog.Warningf("Get zuul-route from configMap failed", err)
 			return
 		}
@@ -241,10 +343,10 @@ func recursiveAdd(oldMap map[string]interface{}, newMap map[string]interface{}) 
 func separateRoute(gateway map[string]interface{}) (string, string, map[string]interface{}, error) {
 	routeMap := make(map[string]interface{})
 	for k, v := range gateway {
-		if k == "zuul" && reflect.TypeOf(v).Kind() == reflect.Map {
+		if k == entity.ZuulNode && reflect.TypeOf(v).Kind() == reflect.Map {
 			vm := v.(map[string]interface{})
 			for rk, rv := range vm {
-				if rk == "routes" {
+				if rk == entity.RoutesNode {
 					routeMap[rk] = rv
 					delete(vm, rk)
 				}
