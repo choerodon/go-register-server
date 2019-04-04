@@ -290,11 +290,11 @@ func processZuulRoot(kvMap map[string]interface{}, routeMap map[string]interface
 				if reflect.TypeOf(element).Kind() == reflect.Map {
 					newKey += "."
 					processZuulRoot(kvMap, element.(map[string]interface{}), newKey)
-				} else if reflect.TypeOf(element).Kind() == reflect.String {
+				} else {
 					kvMap[newKey] = element
 				}
 			}
-		} else if value.Kind() == reflect.String {
+		} else {
 			kvMap[key] = v
 		}
 	}
