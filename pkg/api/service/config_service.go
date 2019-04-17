@@ -47,20 +47,20 @@ func (es *ConfigServiceImpl) AddOrUpdate(request *restful.Request, response *res
 	dto := new(entity.ZuulRootDTO)
 	err := request.ReadEntity(&dto)
 	if err != nil {
-		glog.Warningf("Add or update zuul-root failed when readEntity", err)
+		glog.Warningf("Add or update zuul-route failed when readEntity", err)
 		_ = response.WriteErrorString(http.StatusBadRequest, "invalid ZuulRootDTO")
 		return
 	}
 	err = es.validate.Struct(dto)
 	if err != nil {
-		glog.Warningf("Add or update zuul-root failed because of invalid ZuulRootDTO", err)
+		glog.Warningf("Add or update zuul-route failed because of invalid ZuulRootDTO", err)
 		_ = response.WriteErrorString(http.StatusBadRequest, "invalid ZuulRootDTO")
 		return
 	}
 	configMap, namespace := es.configMapOperator.QueryConfigMapAndNamespaceByName(entity.RouteConfigMap)
 	if configMap == nil {
-		glog.Warningf("Add or update zuul-root failed because of can not find config map : zuul-root", err)
-		_ = response.WriteErrorString(http.StatusNotFound, "not found zuul-root")
+		glog.Warningf("Add or update zuul-route failed because of can not find config map : zuul-route", err)
+		_ = response.WriteErrorString(http.StatusNotFound, "not found zuul-route")
 		return
 	}
 	version := configMap.ObjectMeta.Annotations[entity.ChoerodonVersion]
@@ -69,8 +69,8 @@ func (es *ConfigServiceImpl) AddOrUpdate(request *restful.Request, response *res
 	oldYaml := configMap.Data[profileKey]
 	source := make(map[string]interface{})
 	if oldYaml == "" {
-		glog.Warningf("zuul-root yaml is empty", err)
-		_ = response.WriteErrorString(http.StatusBadRequest, "empty zuul-root")
+		glog.Warningf("zuul-route yaml is empty", err)
+		_ = response.WriteErrorString(http.StatusBadRequest, "empty zuul-route")
 		return
 	}
 	err = yaml.Unmarshal([]byte(oldYaml), &source)
@@ -134,8 +134,8 @@ func (es *ConfigServiceImpl) dto2map(route map[string]interface{}, dto *entity.Z
 	if dto.Url != "" {
 		route[entity.Url] = dto.Url
 	}
-	if dto.StripPrefix != "" {
-		route[entity.StripPrefix] = dto.StripPrefix
+	if dto.SensitiveHeaders != "" {
+		route[entity.SensitiveHeaders] = dto.SensitiveHeaders
 	}
 	if dto.HelperService != "" {
 		route[entity.HelperService] = dto.HelperService

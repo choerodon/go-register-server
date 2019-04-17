@@ -6,7 +6,7 @@
 
 ### 新增
 
-- `ConfigMap` `zuul-root` 添加和更新路由接口
+- `ConfigMap` `zuul-route` 添加和更新路由接口
 
 ### 修改
 

@@ -130,9 +130,9 @@ type ZuulRootDTO struct {
 	Path                   string `json:"path" validate:"required"`
 	ServiceId              string `json:"serviceId" validate:"required"`
 	Url                    string `json:"url"`
-	StripPrefix            string `json:"stripPrefix"`
+	StripPrefix            bool   `json:"stripPrefix"`
 	Retryable              bool   `json:"retryable"`
-	SensitiveHeaders       bool   `json:"sensitiveHeaders"`
+	SensitiveHeaders       string `json:"sensitiveHeaders"`
 	CustomSensitiveHeaders bool   `json:"customSensitiveHeaders"`
 	HelperService          string `json:"helperService"`
 	BuiltIn                bool   `json:"builtIn"`
