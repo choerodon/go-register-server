@@ -58,6 +58,9 @@ func Register() {
 		//向zuul-route里添加或更新路由
 		ws.Route(ws.POST("zuul").To(cs.AddOrUpdate).
 			Doc("Add route to config map which name is zuul-route").Produces("application/json"))
+		//从zuul-route里删除路由
+		ws.Route(ws.POST("zuul/delete").To(cs.Delete).
+			Doc("Delete route from config map which name is zuul-route").Produces("application/json"))
 	}
 
 	restful.Add(ws)
