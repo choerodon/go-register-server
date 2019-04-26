@@ -7,7 +7,7 @@ replicaCount: 1
 image:
   repository: registry.choerodon.com.cn/choerodon/register-server
   tag: latest
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 deployment:
   managementPort: 8000
