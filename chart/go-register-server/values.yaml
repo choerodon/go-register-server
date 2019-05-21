@@ -34,7 +34,7 @@ ingress:
   host: example.com
 
 rbac:
-  create: false
+  create: true
   serviceAccountName: default
 
 resources: 
