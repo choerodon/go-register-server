@@ -17,7 +17,7 @@ env:
     REGISTER_SERVICE_NAMESPACE: io-choerodon
 
 service:
-  enable: false
+  enabled: false
   name: go-register-servers
   type: ClusterIP
   port: 8000
@@ -30,7 +30,7 @@ logs:
   parser: docker
 
 ingress:
-  enable: false
+  enabled: false
   host: example.com
 
 rbac:
