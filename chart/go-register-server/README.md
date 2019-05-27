@@ -65,7 +65,8 @@ choerodon.io/metrics-path: {{ .Values.metrics.path | quote }}
 
 参数名 | 含义 
 --- |  --- 
-service.enable | 是否创建service
+service.enabled | 是否创建service
+ingress.enabled | 是否创建ingress
 persistence.enabled | 是否启用持久化存储
 persistence.existingClaim | 绑定的pvc名称
 env.open.REGISTER_SERVICE_NAMESPACE | 注册中心监听的namespace，多个namespace用空格间隔
