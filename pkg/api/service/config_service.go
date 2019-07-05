@@ -257,12 +257,11 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 		_ = response.WriteErrorString(http.StatusNotModified, "configMap is already exist")
 		return
 	}
-
 	if dto.UpdatePolicy == entity.UpdatePolicyAdd {
 		profileKey := utils.ConfigMapProfileKey(dto.Profile)
 		oldYaml := queryConfigMap.Data[profileKey]
 		if oldYaml != "" {
-			newYaml, err := addProperty(oldYaml, source)
+			newYaml, err := processProperty(oldYaml, source, entity.AddProperty)
 			if err != nil {
 				glog.Warningf("Save config failed when merge yaml", err)
 				_ = response.WriteErrorString(http.StatusInternalServerError, "merge yaml failed")
@@ -271,6 +270,20 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 			dto.Yaml = newYaml
 		}
 	}
+	if dto.UpdatePolicy == entity.UpdatePolicyUpdate {
+		profileKey := utils.ConfigMapProfileKey(dto.Profile)
+		oldYaml := queryConfigMap.Data[profileKey]
+		if oldYaml != "" {
+			mergedYaml, err := processProperty(oldYaml, source, entity.MergeProperty)
+			if err != nil {
+				glog.Warningf("Save config failed when merge yaml", err)
+				_ = response.WriteErrorString(http.StatusInternalServerError, "merge yaml failed")
+				return
+			}
+			dto.Yaml = mergedYaml
+		}
+	}
+	//not,add,update,override四种策略，不是前三种，就是override。这个方法起到覆盖或者为update/add更新config的作用
 	if dto.UpdatePolicy != entity.UpdatePolicyNot {
 		_, err := es.configMapOperator.UpdateConfigMap(dto)
 		if err != nil {
@@ -393,13 +406,39 @@ func isGateway(service string) bool {
 	return false
 }
 
-func addProperty(oldYaml string, newMap map[string]interface{}) (string, error) {
+/**
+action=addProperty，只向旧yaml中新增
+action=mergeProperty，旧yaml如果有值更新，先更新，然后再往旧yaml中新增
+*/
+func processProperty(oldYaml string, newMap map[string]interface{}, action string) (string, error) {
 	oldMap := make(map[string]interface{})
 	err := yaml.Unmarshal([]byte(oldYaml), &oldMap)
 	if err != nil {
 		return "", nil
 	}
-	recursiveAdd(oldMap, newMap)
+	if action == entity.AddProperty {
+		recursiveAdd(oldMap, newMap)
+	}
+	if action == entity.MergeProperty {
+		recursiveAddAndUpdate(oldMap, newMap)
+	}
+	data, err := yaml.Marshal(oldMap)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+/**
+ * 遍历newMap，如果有更新的值，则更新，有新增的值，就新增
+ */
+func mergeProperty(oldYaml string, newMap map[string]interface{}) (string, error) {
+	oldMap := make(map[string]interface{})
+	err := yaml.Unmarshal([]byte(oldYaml), &oldMap)
+	if err != nil {
+		return "", nil
+	}
+	recursiveAddAndUpdate(oldMap, newMap)
 	data, err := yaml.Marshal(oldMap)
 	if err != nil {
 		return "", err
@@ -414,6 +453,21 @@ func recursiveAdd(oldMap map[string]interface{}, newMap map[string]interface{}) 
 			oldMap[nk] = nv
 		} else if nv != nil && reflect.TypeOf(nv).Kind() == reflect.Map && ov != nil && reflect.TypeOf(ov).Kind() == reflect.Map {
 			recursiveAdd(ov.(map[string]interface{}), nv.(map[string]interface{}))
+		}
+	}
+}
+
+func recursiveAddAndUpdate(oldMap map[string]interface{}, newMap map[string]interface{}) {
+	for newKey, newValue := range newMap {
+		if oldValue, ok := oldMap[newKey]; ok {
+			if newValue != nil && reflect.TypeOf(newValue).Kind() == reflect.Map && oldValue != nil && reflect.TypeOf(oldValue).Kind() == reflect.Map {
+				recursiveAddAndUpdate(oldValue.(map[string]interface{}), newValue.(map[string]interface{}))
+			}
+			if newValue != nil && oldValue != nil && reflect.TypeOf(oldValue).Kind() != reflect.Map && newValue != oldValue {
+				oldMap[newKey] = newValue
+			}
+		} else {
+			oldMap[newKey] = newValue
 		}
 	}
 }
