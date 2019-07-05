@@ -130,12 +130,12 @@ type ZuulRootDTO struct {
 	Path                   string `json:"path" validate:"required"`
 	ServiceId              string `json:"serviceId" validate:"required"`
 	Url                    string `json:"url"`
-	StripPrefix            bool   `json:"stripPrefix"`
-	Retryable              bool   `json:"retryable"`
+	StripPrefix            bool   `json:"stripPrefix,omitempty"`
+	Retryable              bool   `json:"retryable,omitempty"`
 	SensitiveHeaders       string `json:"sensitiveHeaders"`
-	CustomSensitiveHeaders bool   `json:"customSensitiveHeaders"`
+	CustomSensitiveHeaders bool   `json:"customSensitiveHeaders,omitempty"`
 	HelperService          string `json:"helperService"`
-	BuiltIn                bool   `json:"builtIn"`
+	BuiltIn                bool   `json:"builtIn,omitempty"`
 }
 
 const (
@@ -169,6 +169,12 @@ const (
 	UpdatePolicyAdd      = "add"
 	UpdatePolicyNot      = "not"
 	UpdatePolicyOverride = "override"
+	UpdatePolicyUpdate   = "update"
+)
+
+const (
+	AddProperty   = "addProperty"
+	MergeProperty = "mergeProperty"
 )
 
 var ConfigServerAdditions = map[string]interface{}{
@@ -182,5 +188,5 @@ var ConfigServerAdditions = map[string]interface{}{
 
 func ValidateUpdatePolicy(fl validator.FieldLevel) bool {
 	v := fl.Field().String()
-	return v == UpdatePolicyAdd || v == UpdatePolicyNot || v == UpdatePolicyOverride
+	return v == UpdatePolicyAdd || v == UpdatePolicyNot || v == UpdatePolicyOverride || v == UpdatePolicyUpdate
 }
