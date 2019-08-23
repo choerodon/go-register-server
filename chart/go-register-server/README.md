@@ -1,72 +1,78 @@
-部署文件的渲染模板，我们下文将定义一些变量，helm执行时会将变量渲染进模板文件中。
+# Choerodon Asgard Service
+Choerodon Asgard Service 是一个任务调度服务，通过`saga` 实现微服务之间的数据一致性。
 
-## _helpers.tpl
+## Introduction
 
-这个文件我们用来进行标签模板的定义，以便在上文提到的位置进行标签渲染。
+## Add Helm chart repository
 
-标签总共分为三个部分: 平台、微服务、监控。
-
-### 平台标签
-
-#### deployment 级:
-
+``` bash    
+helm repo add choerodon https://openchart.choerodon.com.cn/choerodon/c7n
+helm repo update
 ```
-{{- define "service.labels.standard" -}}
-choerodon.io/release: {{ .Release.Name | quote }}
-{{- end -}}
+
+## Installing the Chart
+
+```bash
+$ helm install c7n/go-register-server \
+      --set service.enabled=true \
+      --set service.name=register-server \
+      --set env.open.REGISTER_SERVICE_NAMESPACE="c7n-system" \
+      --set rbac.create=true \
+      --name register-server \
+      --namespace c7n-system
 ```
-平台管理实例需要的实例ID。
 
-### 微服务标签
+Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-#### pod 级:
+## Uninstalling the Chart
 
+```bash
+$ helm delete register-server
 ```
-{{- define "service.microservice.labels" -}}
-choerodon.io/version: {{ .Chart.Version | quote }}
-choerodon.io/service: {{ .Chart.Name | quote }}
-choerodon.io/metrics-port: {{ .Values.deployment.managementPort | quote }}
-{{- end -}}
+
+## Configuration
+
+Parameter | Description	| Default
+--- |  ---  |  ---  
+`replicaCount` | Replicas count | `1`
+`deployment.managementPort` | 服务管理端口 | `8000`
+`env.open.REGISTER_SERVICE_NAMESPACE` | 注册中心监听的`namespace`，多个`namespace` 用空格间隔 | `c7n-system`
+`service.enabled` | 是否创建`service` | `false`
+`service.port` | service端口 | `8000`
+`service.name` | service名称 | `register-server`
+`service.type` | service类型 | `ClusterIP`
+`metrics.path` | 收集应用的指标数据路径 | ``
+`metrics.group` | 性能指标应用分组 | `go-register-server`
+`logs.parser` | 日志收集格式 | `docker`
+`ingress.enabled` | 是否创建ingress | `false`
+`ingress.host` | ingress地址 | `register.example.com`
+`rbac.create` | 是否创建`ClusterRole` 和`serviceAccountName` | `true`
+`rbac.serviceAccountName` | serviceAccountName | `default`
+`resources.limits` | k8s中容器能使用资源的资源最大值 | `512Mi`
+`resources.requests` | k8s中容器使用的最小资源需求 | `256Mi`
+
+## 验证部署
+```bash
+curl $(kubectl get svc register-server -o jsonpath="{.spec.clusterIP}" -n c7n-system):8000/eureka/apps
 ```
-微服务注册中心进行识别时所需要的版本号、项目名称、管理端口。
+出现以下类似信息即为成功部署
 
-### 监控和日志标签
-
-#### deployment 级:
-
+```json
+{
+    "name": "go-register-server",
+    "instance": [
+        {
+            "instanceId": "192.168.3.19:go-register-server:8000",
+            "hostName": "192.168.3.19",
+            "app": "go-register-server",
+            "ipAddr": "192.168.3.19",
+            "status": "UP",
+             ...
+             "metadata": {
+                "VERSION": "0.18.0"
+            },
+             ...
+        }
+    ]
+}
 ```
-{{- define "service.logging.deployment.label" -}}
-choerodon.io/logs-parser: {{ .Values.logs.parser | quote }}
-{{- end -}}
-```
-日志管理所需要的应用标签。该标签指定应用程序的日志格式，内置格式有`nginx`,`spring-boot`,`docker`对于spring-boot微服务请使用`spring-boot`，如果不需要收集日志请移除此段代码，并删除模板文件关于`service.logging.deployment.label`的引用。
-
-#### pod 级:
-
-```
-{{- define "service.monitoring.pod.annotations" -}}
-choerodon.io/metrics-group: {{ .Values.metrics.group | quote }}
-choerodon.io/metrics-path: {{ .Values.metrics.path | quote }}
-{{- end -}}
-```
-性能指标管理所需要的应用类别以及监控指标路径。其中`metrics-group`将应用按照某个关键字分组，并在grafana配置实现分组展示。`metrics-path`指定收集应用的指标数据路径。
-如果不需要监控请移除此段代码
-
-## values.yaml
-
-这个文件中的键值对，即为我们上文中所引用的变量。
-
-将所以有变量集中在一个文件中，方便部署的时候进行归档以及灵活替换。
-
-同时，helm命令支持使用 `--set FOO_BAR=FOOBAR` 参数对values 文件中的变量进行赋值，可以进一步简化部署流程。
-
-
-## 参数对照表
-
-参数名 | 含义 
---- |  --- 
-service.enabled | 是否创建service
-ingress.enabled | 是否创建ingress
-persistence.enabled | 是否启用持久化存储
-persistence.existingClaim | 绑定的pvc名称
-env.open.REGISTER_SERVICE_NAMESPACE | 注册中心监听的namespace，多个namespace用空格间隔
