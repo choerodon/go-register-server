@@ -14,11 +14,11 @@ deployment:
 
 env:
   open:
-    REGISTER_SERVICE_NAMESPACE: io-choerodon
+    REGISTER_SERVICE_NAMESPACE: c7n-system
 
 service:
   enabled: false
-  name: go-register-servers
+  name: register-server
   type: ClusterIP
   port: 8000
 
@@ -31,7 +31,7 @@ logs:
 
 ingress:
   enabled: false
-  host: example.com
+  host: register.example.com
 
 rbac:
   create: true
