@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"github.com/choerodon/go-register-server/pkg/api/repository"
@@ -52,7 +53,7 @@ func NewConfigMapOperator() ConfigMapOperator {
 		return ConfigMapClient
 	}
 	configMapInformer := KubeInformerFactory.Core().V1().ConfigMaps()
-	ConfigMapClient := &ConfigMapOperatorImpl{
+	ConfigMapClient = &ConfigMapOperatorImpl{
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "cofigmap"),
 		workerLoopPeriod: time.Second,
 		lister:           configMapInformer.Lister(),
@@ -149,6 +150,12 @@ func (c *ConfigMapOperatorImpl) syncHandler(key string) (bool, error) {
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return true, nil
+	}
+
+	if key == fmt.Sprintf("%s/%s",
+		embed.Env.RegisterServerNamespace, entity.RegisterServerName) {
+		updateInstance(c)
 		return true, nil
 	}
 
@@ -291,8 +298,62 @@ func newV1ConfigMap(dto *entity.SaveConfigDTO) *v1.ConfigMap {
 		ObjectMeta: metaV1.ObjectMeta{
 			Namespace: dto.Namespace,
 			Name:      dto.Service,
-			Annotations: map[string]string{entity.ChoerodonService: dto.Service, entity.ChoerodonFeature: entity.ChoerodonFeatureConfig, entity.ChoerodonVersion: dto.Version},
+			Annotations: map[string]string{
+				entity.ChoerodonService: dto.Service,
+				entity.ChoerodonVersion: dto.Version,
+				entity.ChoerodonFeature: entity.ChoerodonFeatureConfig,
+			},
 		},
 		Data: map[string]string{utils.ConfigMapProfileKey(dto.Profile): dto.Yaml},
+	}
+}
+
+func DeleteInstanceFromConfigMap(key string) {
+	cmClient := KubeClient.CoreV1().ConfigMaps(embed.Env.RegisterServerNamespace)
+	configMap, err := cmClient.Get(entity.RegisterServerName, metaV1.GetOptions{})
+	if err == nil {
+		delete(configMap.Data, strings.ReplaceAll(key, ":", "-"))
+		_, err := cmClient.Update(configMap)
+		if err != nil {
+			glog.Error("%+v", err)
+		}
+	} else {
+		glog.Error("%+v", err)
+	}
+}
+
+func updateInstance(c *ConfigMapOperatorImpl) {
+	configMap, err := c.kubeV1Client.
+		ConfigMaps(embed.Env.RegisterServerNamespace).Get(entity.RegisterServerName, metaV1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			glog.Warningf("configMap '%s' in work queue no longer exists",
+				fmt.Sprintf("%s/%s", embed.Env.RegisterServerNamespace, entity.RegisterServerName))
+		}
+		return
+	}
+
+	// 遍历查找被删除的instance
+	deleteList := make([]string, 3)
+	c.appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
+		instanceId := key.(string)
+		if _, ok := configMap.Data[strings.ReplaceAll(instanceId, ":", "-")]; !ok {
+			deleteList = append(deleteList, instanceId)
+		}
+		return true
+	})
+	// 从内存中删除
+	for _, d := range deleteList {
+		c.appRepo.CustomInstanceStore.Delete(d)
+	}
+	// 更新instance
+	for key, instanceJson := range configMap.Data {
+		var instance entity.Instance
+		e := json.Unmarshal([]byte(instanceJson), &instance)
+		if e != nil {
+			glog.Infof("Unmarshal register server config map of instancesJson error: %+v %s", e, key)
+			return
+		}
+		c.appRepo.CustomInstanceStore.Store(instance.InstanceId, &instance)
 	}
 }

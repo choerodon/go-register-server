@@ -19,6 +19,8 @@ func Register() {
 
 	glog.Info("Register eureka app APIs")
 
+	rs.RegisterCustomAppFromConfigMap()
+
 	ws := new(restful.WebService)
 
 	ws.Path("/").Produces(restful.MIME_JSON, restful.MIME_XML)
@@ -39,12 +41,21 @@ func Register() {
 		Doc("Get all apps delta")).Produces("application/json")
 
 	ws.Route(ws.POST("eureka/apps/{app-name}").To(rs.Register).
-		Doc("Get a app").Produces("application/json").
+		Doc("Register a app").Produces("application/json").
 		Param(ws.PathParameter("app-name", "app name").DataType("string")))
 
 	ws.Route(ws.PUT("eureka/apps/{app-name}/{instance-id}").To(rs.Renew).
 		Doc("renew").
 		Param(ws.PathParameter("app-name", "app name").DataType("string")).
+		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
+
+	ws.Route(ws.DELETE("eureka/apps/{app-name}/{instance-id}").To(rs.Delete).
+		Doc("delete").
+		Param(ws.PathParameter("app-name", "app name").DataType("string")).
+		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
+
+	ws.Route(ws.PUT("eureka/apps/metadata").To(rs.UpdateMateData).
+		Doc("Update matedata").Produces("application/json").
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 
 	if embed.Env.ConfigServer.Enabled {
