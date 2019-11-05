@@ -62,44 +62,20 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *entity.Applicat
 		},
 	}
 	appMap := make(map[string]*entity.Application)
+
+	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
+		instanceId := key.(string)
+		instance := value.(*entity.Instance)
+		appRepo.InstanceStore.Store(instanceId, instance)
+		return true
+	})
+
 	appRepo.InstanceStore.Range(func(key, value interface{}) bool {
 		instance := value.(*entity.Instance)
 		if appMap[instance.App] == nil {
 			app := &entity.Application{
 				Name:      instance.App,
-				Instances: make([]*entity.Instance, 0, 10),
-			}
-
-			instanceId := key.(string)
-			if customInstance, ok := appRepo.CustomInstanceStore.Load(instanceId); ok {
-				custom := customInstance.(*entity.Instance)
-				instance.Status = custom.Status
-				for k, v := range custom.Metadata {
-					instance.Metadata[k] = v
-				}
-			}
-
-			app.Instances = append(app.Instances, instance)
-			appMap[instance.App] = app
-			appResource.Applications.ApplicationList = append(appResource.Applications.ApplicationList, app)
-		} else {
-			app := appMap[instance.App]
-			app.Instances = append(app.Instances, instance)
-
-		}
-		return true
-	})
-
-	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
-		instance := value.(*entity.Instance)
-		if _, ok := appRepo.InstanceStore.Load(instance.InstanceId); ok {
-			return true
-		}
-
-		if appMap[instance.App] == nil {
-			app := &entity.Application{
-				Name:      instance.App,
-				Instances: make([]*entity.Instance, 0, 10),
+				Instances: make([]*entity.Instance, 0, 5),
 			}
 			app.Instances = append(app.Instances, instance)
 			appMap[instance.App] = app
@@ -107,7 +83,6 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *entity.Applicat
 		} else {
 			app := appMap[instance.App]
 			app.Instances = append(app.Instances, instance)
-
 		}
 		return true
 	})
@@ -131,27 +106,16 @@ func (appRepo *ApplicationRepository) Renew(appName string, instanceId string) e
 }
 
 func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []string {
-	instances := make([]string, 0, 10)
-	appRepo.InstanceStore.Range(func(key, value interface{}) bool {
-		instance := value.(*entity.Instance)
-		instanceId := key.(string)
-		if customInstance, ok := appRepo.CustomInstanceStore.Load(instanceId); ok {
-			custom := customInstance.(*entity.Instance)
-			instance.Status = custom.Status
-			for k, v := range custom.Metadata {
-				instance.Metadata[k] = v
-			}
-		}
-		if instance.App == service && instance.Status == "UP" {
-			instances = append(instances, instance.HomePageUrl)
-		}
-		return true
-	})
+	instances := make([]string, 0, 5)
+
 	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
-		if _, ok := appRepo.InstanceStore.Load(instanceId); ok {
-			return true
-		}
+		instance := value.(*entity.Instance)
+		appRepo.InstanceStore.Store(instanceId, instance)
+		return true
+	})
+
+	appRepo.InstanceStore.Range(func(key, value interface{}) bool {
 		instance := value.(*entity.Instance)
 		if instance.App == service && instance.Status == "UP" {
 			instances = append(instances, instance.HomePageUrl)
@@ -162,27 +126,16 @@ func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []
 }
 
 func (appRepo *ApplicationRepository) GetInstancesByService(service string) []*entity.Instance {
-	instances := make([]*entity.Instance, 0)
-	appRepo.InstanceStore.Range(func(key, value interface{}) bool {
-		instance := value.(*entity.Instance)
-		instanceId := key.(string)
-		if customInstance, ok := appRepo.CustomInstanceStore.Load(instanceId); ok {
-			custom := customInstance.(*entity.Instance)
-			instance.Status = custom.Status
-			for k, v := range custom.Metadata {
-				instance.Metadata[k] = v
-			}
-		}
-		if instance.App == service && instance.Status == "UP" {
-			instances = append(instances, instance)
-		}
-		return true
-	})
+	instances := make([]*entity.Instance, 5)
+
 	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
-		if _, ok := appRepo.InstanceStore.Load(instanceId); ok {
-			return true
-		}
+		instance := value.(*entity.Instance)
+		appRepo.InstanceStore.Store(instanceId, instance)
+		return true
+	})
+
+	appRepo.InstanceStore.Range(func(key, value interface{}) bool {
 		instance := value.(*entity.Instance)
 		if instance.App == service && instance.Status == "UP" {
 			instances = append(instances, instance)

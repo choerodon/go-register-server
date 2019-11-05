@@ -334,7 +334,7 @@ func updateInstance(c *ConfigMapOperatorImpl) {
 	}
 
 	// 遍历查找被删除的instance
-	deleteList := make([]string, 3)
+	deleteList := make([]string, 0, 3)
 	c.appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
 		if _, ok := configMap.Data[strings.ReplaceAll(instanceId, ":", "-")]; !ok {
@@ -347,13 +347,13 @@ func updateInstance(c *ConfigMapOperatorImpl) {
 		c.appRepo.CustomInstanceStore.Delete(d)
 	}
 	// 更新instance
-	for key, instanceJson := range configMap.Data {
-		var instance entity.Instance
-		e := json.Unmarshal([]byte(instanceJson), &instance)
+	for key, value := range configMap.Data {
+		instance := new(entity.Instance)
+		e := json.Unmarshal([]byte(value), instance)
 		if e != nil {
 			glog.Infof("Unmarshal register server config map of instancesJson error: %+v %s", e, key)
 			return
 		}
-		c.appRepo.CustomInstanceStore.Store(instance.InstanceId, &instance)
+		c.appRepo.CustomInstanceStore.Store(instance.InstanceId, instance)
 	}
 }

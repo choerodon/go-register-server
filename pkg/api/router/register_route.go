@@ -11,15 +11,13 @@ import (
 )
 
 func Register() {
-	appRepo := k8s.AppRepo
+	rs := service.NewEurekaServerServiceImpl(k8s.AppRepo)
 
-	rs := service.NewEurekaServerServiceImpl(appRepo)
-
-	ps := service.NewEurekaPageServiceImpl(appRepo)
+	ps := service.NewEurekaPageServiceImpl(k8s.AppRepo)
 
 	glog.Info("Register eureka app APIs")
 
-	rs.RegisterCustomAppFromConfigMap()
+	rs.InitCustomAppFromConfigMap()
 
 	ws := new(restful.WebService)
 
@@ -59,7 +57,7 @@ func Register() {
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 
 	if embed.Env.ConfigServer.Enabled {
-		cs := service.NewConfigServiceImpl(appRepo)
+		cs := service.NewConfigServiceImpl(k8s.AppRepo)
 		// 拉取配置
 		ws.Route(ws.GET("{service}/{version}").To(cs.Poll).
 			Doc("Get config")).Produces("application/json")

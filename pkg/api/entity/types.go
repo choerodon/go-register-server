@@ -39,16 +39,17 @@ type EurekaInstance struct {
 	AvailabilityZones int
 }
 
-// StatusType is an enum of the different statuses allowed by Eureka.
-type StatusType string
-
 // Supported statuses
 const (
-	UP           StatusType = "UP"
-	DOWN         StatusType = "DOWN"
-	STARTING     StatusType = "STARTING"
-	OUTOFSERVICE StatusType = "OUT_OF_SERVICE"
-	UNKNOWN      StatusType = "UNKNOWN"
+	UP                = "UP"
+	DOWN              = "DOWN"
+	ADDED             = "ADDED"
+	STARTING          = "STARTING"
+	OUTOFSERVICE      = "OUT_OF_SERVICE"
+	UNKNOWN           = "UNKNOWN"
+	CUSTOM_APP_PREFIX = "custom"
+	DATA_CENTRE_CLASS = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
+	DATA_CENTRE_NAME  = "MyOwn"
 )
 
 type Instance struct {
@@ -56,8 +57,8 @@ type Instance struct {
 	HostName         string            `xml:"hostName" json:"hostName"`
 	App              string            `xml:"app" json:"app"`
 	IPAddr           string            `xml:"ipAddr" json:"ipAddr"`
-	Status           StatusType        `xml:"status" json:"status"`
-	OverriddenStatus StatusType        `xml:"overriddenstatus" json:"overriddenstatus"`
+	Status           string            `xml:"status" json:"status"`
+	OverriddenStatus string            `xml:"overriddenstatus" json:"overriddenstatus"`
 	Port             Port              `xml:"port" json:"port"`
 	SecurePort       Port              `xml:"securePort" json:"securePort"`
 	CountryId        uint64            `xml:"countryId" json:"countryId"`
