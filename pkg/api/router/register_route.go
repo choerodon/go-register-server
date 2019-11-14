@@ -11,13 +11,13 @@ import (
 )
 
 func Register() {
-	appRepo := k8s.AppRepo
+	rs := service.NewEurekaServerServiceImpl(k8s.AppRepo)
 
-	rs := service.NewEurekaServerServiceImpl(appRepo)
-
-	ps := service.NewEurekaPageServiceImpl(appRepo)
+	ps := service.NewEurekaPageServiceImpl(k8s.AppRepo)
 
 	glog.Info("Register eureka app APIs")
+
+	rs.InitCustomAppFromConfigMap()
 
 	ws := new(restful.WebService)
 
@@ -39,7 +39,7 @@ func Register() {
 		Doc("Get all apps delta")).Produces("application/json")
 
 	ws.Route(ws.POST("eureka/apps/{app-name}").To(rs.Register).
-		Doc("Get a app").Produces("application/json").
+		Doc("Register a app").Produces("application/json").
 		Param(ws.PathParameter("app-name", "app name").DataType("string")))
 
 	ws.Route(ws.PUT("eureka/apps/{app-name}/{instance-id}").To(rs.Renew).
@@ -47,8 +47,17 @@ func Register() {
 		Param(ws.PathParameter("app-name", "app name").DataType("string")).
 		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
 
+	ws.Route(ws.DELETE("eureka/apps/{app-name}/{instance-id}").To(rs.Delete).
+		Doc("delete").
+		Param(ws.PathParameter("app-name", "app name").DataType("string")).
+		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
+
+	ws.Route(ws.PUT("eureka/apps/metadata").To(rs.UpdateMateData).
+		Doc("Update matedata").Produces("application/json").
+		Param(ws.PathParameter("instance-id", "instance id").DataType("string")))
+
 	if embed.Env.ConfigServer.Enabled {
-		cs := service.NewConfigServiceImpl(appRepo)
+		cs := service.NewConfigServiceImpl(k8s.AppRepo)
 		// 拉取配置
 		ws.Route(ws.GET("{service}/{version}").To(cs.Poll).
 			Doc("Get config")).Produces("application/json")

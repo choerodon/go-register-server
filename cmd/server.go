@@ -16,7 +16,7 @@ import (
 	"github.com/choerodon/go-register-server/pkg/api/repository"
 	"github.com/choerodon/go-register-server/pkg/api/server"
 	"github.com/choerodon/go-register-server/pkg/k8s"
-	"github.com/choerodon/go-register-server/pkg/signals"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 func NewServerCommand() *cobra.Command {

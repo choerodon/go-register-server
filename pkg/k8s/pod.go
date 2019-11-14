@@ -20,25 +20,26 @@ import (
 	"strings"
 )
 
+var PodClient *PodOperator
+
 type PodOperatorInterface interface {
 	StartMonitor(stopCh <-chan struct{})
 }
 
 type PodOperator struct {
 	podsLister coreListeners.PodLister
-
 	podsSynced cache.InformerSynced
-
-	workQueue workqueue.RateLimitingInterface
-
-	appRepo *repository.ApplicationRepository
+	workQueue  workqueue.RateLimitingInterface
+	appRepo    *repository.ApplicationRepository
 }
 
-func NewPodAgent() *PodOperator {
-
+func NewPodAgent() PodOperatorInterface {
+	if PodClient != nil {
+		return PodClient
+	}
 	podInformer := KubeInformerFactory.Core().V1().Pods()
 
-	podAgent := &PodOperator{
+	PodClient = &PodOperator{
 		podsLister: podInformer.Lister(),
 		podsSynced: podInformer.Informer().HasSynced,
 		workQueue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods"),
@@ -48,19 +49,19 @@ func NewPodAgent() *PodOperator {
 	glog.Info("Setting up event handlers")
 
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: podAgent.enqueuePod,
+		AddFunc: PodClient.enqueuePod,
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			newPod := newObj.(*coreV1.Pod)
 			oldPod := oldObj.(*coreV1.Pod)
 			if newPod.ResourceVersion == oldPod.ResourceVersion {
 				return
 			}
-			podAgent.enqueuePod(newObj)
+			PodClient.enqueuePod(newObj)
 		},
-		DeleteFunc: podAgent.enqueuePod,
+		DeleteFunc: PodClient.enqueuePod,
 	})
 
-	return podAgent
+	return PodClient
 }
 
 func (c *PodOperator) enqueuePod(obj interface{}) {
@@ -123,7 +124,7 @@ func (c *PodOperator) syncHandler(key string) (bool, error) {
 	matchNum := 0
 	for _, ns := range embed.Env.RegisterServiceNamespace {
 		if strings.Compare(ns, namespace) == 0 {
-			matchNum ++
+			matchNum++
 		}
 	}
 	if matchNum < 1 {
@@ -138,6 +139,7 @@ func (c *PodOperator) syncHandler(key string) (bool, error) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			if ins := c.appRepo.DeleteInstance(key); ins != nil {
+				DeleteInstanceFromConfigMap(ins.InstanceId)
 				ins.Status = entity.DOWN
 				glog.Info(key, " DOWN")
 			}
@@ -169,6 +171,7 @@ func (c *PodOperator) syncHandler(key string) (bool, error) {
 
 	} else {
 		if ins := c.appRepo.DeleteInstance(key); ins != nil {
+			DeleteInstanceFromConfigMap(ins.InstanceId)
 			ins.Status = entity.DOWN
 			glog.Info(key, " DOWN")
 		}

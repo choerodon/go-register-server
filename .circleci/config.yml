@@ -13,9 +13,9 @@ jobs:
       - attach_workspace:
           at: .
       - run: |
-          sed -i "s/registry.cn-hangzhou.aliyuncs.com\/choerodon-tools\/golang:1.9.4-alpine3.7/golang:1.9.4-alpine3.7/g" Dockerfile
+          sed -i "s;dockerhub.azk8s.cn/library/; ;g" Dockerfile
           docker login -u ${REGISTRY_USER} -p ${REGISTRY_PASSWORD}
-          docker build --pull -t ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG} .
+          docker build -t ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG} .
           docker push ${DOCKER_GROUP_NAME}/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_TAG}
 
   helm_chart_build:

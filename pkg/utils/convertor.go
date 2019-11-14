@@ -2,30 +2,68 @@ package utils
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"github.com/choerodon/go-register-server/pkg/api/entity"
 	"k8s.io/api/core/v1"
 	"reflect"
-	"strconv"
 	"time"
 )
 
-type Status struct {
-	UP      string
-	DOWN    string
-	UNKNOWN string
+func ImpInstance(instance *entity.Instance) {
+	now := uint64(time.Now().Unix())
+
+	if len(instance.Status) == 0 {
+		instance.Status = entity.UP
+	}
+
+	if instance.Metadata == nil {
+		instance.Metadata = make(map[string]string, 1)
+	}
+
+	if _, ok := instance.Metadata["provisioner"]; !ok {
+		instance.Metadata["provisioner"] = "custom"
+	}
+
+	if len(instance.HomePageUrl) == 0 {
+		instance.HomePageUrl = fmt.Sprintf("http://%s:%d/",
+			instance.IPAddr, instance.Port.Port)
+	}
+	if len(instance.StatusPageUrl) == 0 {
+		instance.StatusPageUrl = fmt.Sprintf("http://%s:%d/actuator/info",
+			instance.IPAddr, instance.Port.Port+1)
+	}
+	if len(instance.HealthCheckUrl) == 0 {
+		instance.HealthCheckUrl = fmt.Sprintf("http://%s:%d/actuator/health",
+			instance.IPAddr, instance.Port.Port+1)
+	}
+
+	instance.HostName = instance.IPAddr
+	instance.OverriddenStatus = entity.UNKNOWN
+	instance.CountryId = 8
+	instance.ActionType = entity.ADDED
+	instance.IsCoordinatingDiscoveryServer = true
+	instance.VipAddress = instance.App
+	instance.SecureVipAddress = instance.App
+	instance.DataCenterInfo = entity.DataCenterInfo{
+		Class: entity.DATA_CENTRE_CLASS,
+		Name:  entity.DATA_CENTRE_NAME,
+	}
+	instance.LeaseInfo.DurationInSecs = 90
+	instance.LeaseInfo.EvictionTimestamp = 0
+	instance.LeaseInfo.RenewalIntervalInSecs = 10
+
+	if instance.LeaseInfo.RegistrationTimestamp == 0 {
+		instance.LeaseInfo.RegistrationTimestamp = now
+	}
+	instance.LeaseInfo.LastRenewalTimestamp = now
+	instance.LeaseInfo.ServiceUpTimestamp = now
+
+	instance.LastUpdatedTimestamp = now
+	instance.LastDirtyTimestamp = now
 }
 
-const (
-	UP              = "UP"
-	DOWN            = "DOWN"
-	UNKNOWN         = "UNKNOWN"
-	dataCentreClass = "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo"
-	dataCentreName  = "MyOwn"
-)
-
 func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
-
 	now := uint64(time.Now().Unix())
 	managementPort := pod.Labels[entity.ChoerodonPort]
 	serviceName := pod.Labels[entity.ChoerodonService]
@@ -33,18 +71,17 @@ func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
 	if container := pod.Spec.Containers[0]; len(container.Ports) > 0 {
 		port = pod.Spec.Containers[0].Ports[0].ContainerPort
 	}
-	instanceId := pod.Status.PodIP + ":" + serviceName + ":" + strconv.Itoa(int(port))
-
-	homePage := "http://" + pod.Status.PodIP + ":" + strconv.Itoa(int(port)) + "/"
-	statusPageUrl := "http://" + pod.Status.PodIP + ":" + managementPort + "/info"
-	healthCheckUrl := "http://" + pod.Status.PodIP + ":" + managementPort + "/health"
+	instanceId := fmt.Sprintf("%s:%s:%d", pod.Status.PodIP, serviceName, port)
+	homePage := fmt.Sprintf("http://%s:%d/", pod.Status.PodIP, port)
+	statusPageUrl := fmt.Sprintf("http://%s:%s/actuator/info", pod.Status.PodIP, managementPort)
+	healthCheckUrl := fmt.Sprintf("http://%s:%s/actuator/health", pod.Status.PodIP, managementPort)
 	instance := &entity.Instance{
 		HostName:         pod.Status.PodIP,
 		App:              serviceName,
 		IPAddr:           pod.Status.PodIP,
-		Status:           UP,
+		Status:           entity.UP,
 		InstanceId:       instanceId,
-		OverriddenStatus: UNKNOWN,
+		OverriddenStatus: entity.UNKNOWN,
 		Port: entity.Port{
 			Port:    port,
 			Enabled: true,
@@ -54,25 +91,27 @@ func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
 			Enabled: false,
 		},
 		CountryId:                     8,
-		ActionType:                    "ADDED",
+		ActionType:                    entity.ADDED,
 		LastDirtyTimestamp:            now,
 		LastUpdatedTimestamp:          now,
 		IsCoordinatingDiscoveryServer: true,
 		SecureVipAddress:              serviceName,
 		VipAddress:                    serviceName,
 		DataCenterInfo: entity.DataCenterInfo{
-			Class: dataCentreClass,
-			Name:  dataCentreName,
+			Class: entity.DATA_CENTRE_CLASS,
+			Name:  entity.DATA_CENTRE_NAME,
 		},
 		HomePageUrl:    homePage,
 		StatusPageUrl:  statusPageUrl,
 		HealthCheckUrl: healthCheckUrl,
 	}
 	meteData := make(map[string]string)
-	meteData["VERSION"] = pod.Labels[entity.ChoerodonVersion]
+	meteData["provisioner"] = "pod"
+	meteData["pod-self-link"] = fmt.Sprintf("%s/%s", pod.GetNamespace(), pod.GetName())
+	meteData["version"] = pod.Labels[entity.ChoerodonVersion]
 	contextPath, ok := pod.Labels[entity.ChoerodonContextPathLabel]
 	if ok {
-		meteData["CONTEXT-PATH"] = contextPath
+		meteData["context-path"] = contextPath
 	}
 
 	instance.Metadata = meteData
@@ -135,4 +174,16 @@ func Sha256Map(data map[string]string) string {
 		str = str + k + v
 	}
 	return Sha256(str)
+}
+
+func DeepCopyInstance(instance *entity.Instance) (*entity.Instance, error) {
+	if bytes, e := json.Marshal(instance); e != nil {
+		return nil, e
+	} else {
+		clone := new(entity.Instance)
+		if e := json.Unmarshal(bytes, clone); e != nil {
+			return nil, e
+		}
+		return clone, nil
+	}
 }
