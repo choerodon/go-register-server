@@ -58,7 +58,7 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *entity.Applicat
 		Applications: &entity.Applications{
 			VersionsDelta:   2,
 			AppsHashcode:    "app_hashcode",
-			ApplicationList: make([]*entity.Application, 0, 10),
+			ApplicationList: make([]*entity.Application, 0),
 		},
 	}
 	appMap := make(map[string]*entity.Application)
@@ -75,7 +75,7 @@ func (appRepo *ApplicationRepository) GetApplicationResources() *entity.Applicat
 		if appMap[instance.App] == nil {
 			app := &entity.Application{
 				Name:      instance.App,
-				Instances: make([]*entity.Instance, 0, 5),
+				Instances: make([]*entity.Instance, 0),
 			}
 			app.Instances = append(app.Instances, instance)
 			appMap[instance.App] = app
@@ -106,7 +106,7 @@ func (appRepo *ApplicationRepository) Renew(appName string, instanceId string) e
 }
 
 func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []string {
-	instances := make([]string, 0, 5)
+	instances := make([]string, 0)
 
 	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
@@ -126,7 +126,7 @@ func (appRepo *ApplicationRepository) GetInstanceIpsByService(service string) []
 }
 
 func (appRepo *ApplicationRepository) GetInstancesByService(service string) []*entity.Instance {
-	instances := make([]*entity.Instance, 5)
+	instances := make([]*entity.Instance, 0)
 
 	appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
