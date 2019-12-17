@@ -334,7 +334,7 @@ func updateInstance(c *ConfigMapOperatorImpl) {
 	}
 
 	// 遍历查找被删除的instance
-	deleteList := make([]string, 0, 3)
+	deleteList := make([]string, 0)
 	c.appRepo.CustomInstanceStore.Range(func(key, value interface{}) bool {
 		instanceId := key.(string)
 		if _, ok := configMap.Data[strings.ReplaceAll(instanceId, ":", "-")]; !ok {
