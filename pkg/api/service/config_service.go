@@ -245,7 +245,8 @@ func (es *ConfigServiceImpl) Save(request *restful.Request, response *restful.Re
 func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, source map[string]interface{}, response *restful.Response) {
 	queryConfigMap := es.configMapOperator.QueryConfigMap(dto.Service, dto.Namespace)
 	if queryConfigMap == nil {
-		_, err := es.configMapOperator.CreateConfigMap(dto)
+		var err error
+		queryConfigMap, err = es.configMapOperator.CreateConfigMap(dto)
 		if err != nil {
 			glog.Warningf("Save config failed when create configMap", err)
 			_ = response.WriteErrorString(http.StatusInternalServerError, "create configMap failed")
@@ -256,6 +257,9 @@ func (es *ConfigServiceImpl) createOrUpdateConfigMap(dto *entity.SaveConfigDTO, 
 		glog.Infof("configMap %s is already exist", dto.Service)
 		_ = response.WriteErrorString(http.StatusNotModified, "configMap is already exist")
 		return
+	}
+	if queryConfigMap.Data == nil {
+		queryConfigMap.Data = make(map[string]string, 0)
 	}
 	if dto.UpdatePolicy == entity.UpdatePolicyAdd {
 		profileKey := utils.ConfigMapProfileKey(dto.Profile)
