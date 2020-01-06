@@ -11,7 +11,7 @@ import (
 )
 
 func ImpInstance(instance *entity.Instance) {
-	now := uint64(time.Now().Unix())
+	now := uint64(time.Now().UnixNano() / 1e6)
 
 	if len(instance.Status) == 0 {
 		instance.Status = entity.UP
@@ -64,7 +64,7 @@ func ImpInstance(instance *entity.Instance) {
 }
 
 func ConvertPod2Instance(pod *v1.Pod) *entity.Instance {
-	now := uint64(time.Now().Unix())
+	now := uint64(time.Now().UnixNano() / 1e6)
 	managementPort := pod.Labels[entity.ChoerodonPort]
 	serviceName := pod.Labels[entity.ChoerodonService]
 	var port int32
