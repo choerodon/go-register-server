@@ -90,3 +90,5 @@ spec:
 {{ toYaml . | indent 8 }}
 {{- end }}
       serviceAccountName: {{ if .Values.rbac.create }}"{{ .Release.Name }}"{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}
+      securityContext:
+        runAsUser: 101
